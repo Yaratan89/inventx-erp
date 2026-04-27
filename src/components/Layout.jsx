@@ -13,15 +13,15 @@ export default function Layout() {
         <Sidebar onClose={() => setMobileMenuOpen(false)} />
       </div>
       <main className="main-content">
-        <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <header style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)}>
-              <Menu size={24} color="var(--text-main)" />
+              <Menu size={22} color="var(--text-main)" />
             </button>
-            <h1 style={{ fontWeight: '500', color: 'var(--text-main)', fontSize: '1.2rem' }}>Acme Co. Envanter</h1>
+            <h1 style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '1.1rem' }}>Acme Co. Envanter</h1>
           </div>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-             <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--primary-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+             <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--primary-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.8rem', color: 'white' }}>
                A
              </div>
           </div>

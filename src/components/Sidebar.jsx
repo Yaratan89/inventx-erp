@@ -11,21 +11,8 @@ export default function Sidebar({ onClose }) {
   const navStyle = ({ isActive }) => ({
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.75rem 1.5rem',
-    color: isActive ? 'var(--primary-color)' : 'var(--text-muted)',
-    textDecoration: 'none',
-    borderLeft: isActive ? '3px solid var(--primary-color)' : '3px solid transparent',
-    backgroundColor: isActive ? 'var(--primary-light)' : 'transparent',
-    fontWeight: isActive ? '600' : '400',
-    transition: 'all var(--transition-fast)'
-  });
-
-  const subNavStyle = ({ isActive }) => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.55rem 1.5rem 0.55rem 2.75rem',
+    gap: '0.6rem',
+    padding: '0.5rem 1rem',
     color: isActive ? 'var(--primary-color)' : 'var(--text-muted)',
     textDecoration: 'none',
     borderLeft: isActive ? '3px solid var(--primary-color)' : '3px solid transparent',
@@ -35,13 +22,27 @@ export default function Sidebar({ onClose }) {
     transition: 'all var(--transition-fast)'
   });
 
+  const subNavStyle = ({ isActive }) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.6rem',
+    padding: '0.4rem 1rem 0.4rem 2rem',
+    color: isActive ? 'var(--primary-color)' : 'var(--text-muted)',
+    textDecoration: 'none',
+    borderLeft: isActive ? '3px solid var(--primary-color)' : '3px solid transparent',
+    backgroundColor: isActive ? 'var(--primary-light)' : 'transparent',
+    fontWeight: isActive ? '600' : '400',
+    fontSize: '0.82rem',
+    transition: 'all var(--transition-fast)'
+  });
+
   return (
     <aside className="sidebar">
-      <div style={{ padding: '0 1.5rem 2rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <div style={{ width: '32px', height: '32px', background: 'var(--primary-color)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Package size={18} color="white" />
+      <div style={{ padding: '0 1rem 1.25rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ width: '28px', height: '28px', background: 'var(--primary-color)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Package size={16} color="white" />
         </div>
-        <h2 style={{ fontSize: '1.25rem', color: 'var(--text-main)', fontWeight: '800', letterSpacing: '1px' }}>INVENTX</h2>
+        <h2 style={{ fontSize: '1.1rem', color: 'var(--text-main)', fontWeight: '800', letterSpacing: '0.5px' }}>INVENTX</h2>
       </div>
 
       <nav className="custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.5rem' }}>
@@ -66,18 +67,18 @@ export default function Sidebar({ onClose }) {
         <button
           onClick={() => setStokOpen(!stokOpen)}
           style={{
-            display: 'flex', alignItems: 'center', gap: '0.75rem',
-            padding: '0.75rem 1.5rem', width: '100%', border: 'none',
+            display: 'flex', alignItems: 'center', gap: '0.6rem',
+            padding: '0.5rem 1rem', width: '100%', border: 'none',
             background: stokOpen ? 'rgba(27,99,216,0.06)' : 'transparent',
             color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit',
-            fontSize: '0.95rem', fontWeight: '500', textAlign: 'left',
+            fontSize: '0.88rem', fontWeight: '500', textAlign: 'left',
             borderLeft: '3px solid transparent',
             transition: 'all var(--transition-fast)'
           }}
         >
-          <Box size={20} />
+          <Box size={18} />
           <span style={{ flex: 1 }}>Stok İşlemleri</span>
-          {stokOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          {stokOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         {stokOpen && (
           <div style={{ background: 'var(--surface-hover)' }}>
@@ -112,18 +113,18 @@ export default function Sidebar({ onClose }) {
         <button
           onClick={() => setFinansOpen(!finansOpen)}
           style={{
-            display: 'flex', alignItems: 'center', gap: '0.75rem',
-            padding: '0.75rem 1.5rem', width: '100%', border: 'none',
+            display: 'flex', alignItems: 'center', gap: '0.6rem',
+            padding: '0.5rem 1rem', width: '100%', border: 'none',
             background: finansOpen ? 'rgba(27,99,216,0.06)' : 'transparent',
             color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit',
-            fontSize: '0.95rem', fontWeight: '500', textAlign: 'left',
+            fontSize: '0.88rem', fontWeight: '500', textAlign: 'left',
             borderLeft: '3px solid transparent',
             transition: 'all var(--transition-fast)'
           }}
         >
-          <Wallet size={20} />
+          <Wallet size={18} />
           <span style={{ flex: 1 }}>Finans Yönetimi</span>
-          {finansOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          {finansOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         {finansOpen && (
           <div style={{ background: 'var(--surface-hover)' }}>
@@ -164,7 +165,7 @@ export default function Sidebar({ onClose }) {
       </nav>
 
       <div style={{ 
-        padding: '1rem 1.5rem', 
+        padding: '0.75rem 1rem', 
         borderTop: '1px solid var(--border-color)',
         flexShrink: 0
       }}>
