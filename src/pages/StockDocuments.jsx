@@ -41,6 +41,7 @@ export default function StockDocuments() {
   const [itemQty, setItemQty] = useState(1);
   const [itemUnit, setItemUnit] = useState('Adet');
   const [itemPrice, setItemPrice] = useState(0);
+  const [itemSalePrice, setItemSalePrice] = useState(0);
   const [showScanner, setShowScanner] = useState(false);
   const [lastScannedCode, setLastScannedCode] = useState(null);
   const [manualBarcodeInput, setManualBarcodeInput] = useState('');
@@ -249,6 +250,7 @@ export default function StockDocuments() {
     const prd = products.find(p => p.id === pid);
     if (prd) {
       setItemPrice(activeTab === 'IN' ? (prd.cost_price || 0) : (prd.price || 0));
+      setItemSalePrice(prd.price || 0);
       setItemQty(1);
       setItemUnit(prd.unit || 'Adet');
     }
@@ -274,6 +276,7 @@ export default function StockDocuments() {
         barcode: prd.barcode || prd.sku,
         quantity: Number(itemQty),
         unit_price: Number(itemPrice),
+        sale_price: activeTab === 'IN' ? Number(itemSalePrice) : Number(itemPrice),
         tax_rate: prd.tax_rate || 20,
         unit: itemUnit || prd.unit || 'Adet',
         tax_amount: Number(itemQty) * Number(itemPrice) * (prd.tax_rate || 20) / 100,
@@ -286,6 +289,7 @@ export default function StockDocuments() {
     setItemQty(1);
     setItemUnit('Adet');
     setItemPrice(0);
+    setItemSalePrice(0);
   };
 
   const removeItemFromCart = (index) => {
@@ -411,6 +415,7 @@ export default function StockDocuments() {
           const updatePayload = {};
           if (activeTab === 'IN') {
             updatePayload.cost_price = Number(it.unit_price);
+            if (it.sale_price) updatePayload.price = Number(it.sale_price);
             updatePayload.tax_rate = Number(it.tax_rate);
           } else {
             updatePayload.price = Number(it.unit_price);
@@ -868,7 +873,10 @@ export default function StockDocuments() {
                               {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                            </select>
                         </div>
-                        <div className="input-group" style={{ flex: 1 }}><label>Fiyat</label><input type="number" className="input-field" value={itemPrice} onChange={e => setItemPrice(e.target.value)} /></div>
+                        <div className="input-group" style={{ flex: 1 }}><label>{activeTab === 'IN' ? 'Alış Fiyatı' : 'Fiyat'}</label><input type="number" className="input-field" value={itemPrice} onChange={e => setItemPrice(e.target.value)} /></div>
+                        {activeTab === 'IN' && (
+                           <div className="input-group" style={{ flex: 1 }}><label>Satış Fiyatı</label><input type="number" className="input-field" value={itemSalePrice} onChange={e => setItemSalePrice(e.target.value)} /></div>
+                        )}
                         <button className="btn btn-primary mobile-full-width" style={{ height: '42px', alignSelf: 'flex-end' }} onClick={addItemToCart}>Ekle</button>
                      </div>
                   </div>
@@ -881,7 +889,8 @@ export default function StockDocuments() {
                         <tr>
                            <th style={{ padding: '0.8rem', textAlign: 'left' }}>Ürün</th>
                            <th style={{ padding: '0.8rem', textAlign: 'center' }}>Miktar / Birim</th>
-                           <th style={{ padding: '0.8rem', textAlign: 'right' }}>{activeTab === 'IN' ? 'Alış Fiyatı (Hariç)' : 'Satış Fiyatı (Hariç)'}</th>
+                           <th style={{ padding: '0.8rem', textAlign: 'right' }}>{activeTab === 'IN' ? 'Alış Fiyatı' : 'Satış Fiyatı'}</th>
+                           {activeTab === 'IN' && <th style={{ padding: '0.8rem', textAlign: 'right' }}>Satış Fiyatı</th>}
                            <th style={{ padding: '0.8rem', textAlign: 'center' }}>KDV %</th>
                            <th style={{ padding: '0.8rem', textAlign: 'right' }}>KDV Tutarı</th>
                            <th style={{ padding: '0.8rem', textAlign: 'right' }}>Toplam (Dahil)</th>
@@ -933,6 +942,16 @@ export default function StockDocuments() {
                                  }} disabled={form.status === 'COMPLETED'} />
                                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '2px' }}>vergiler hariç</div>
                               </td>
+                              {activeTab === 'IN' && (
+                                 <td style={{ padding: '0.8rem', textAlign: 'right' }}>
+                                    <input type="number" step="0.01" className="input-field" style={{ width: '80px', padding: '2px', textAlign: 'right' }} value={it.sale_price || 0} onChange={e => {
+                                       const val = Number(e.target.value);
+                                       const newItems = [...form.items];
+                                       newItems[idx].sale_price = val;
+                                       setForm({...form, items: newItems});
+                                    }} disabled={form.status === 'COMPLETED'} />
+                                 </td>
+                              )}
                               <td style={{ padding: '0.8rem', textAlign: 'center' }}>
                                  <input type="number" className="input-field" style={{ width: '50px', padding: '2px', textAlign: 'center' }} value={it.tax_rate} onChange={e => {
                                     const val = Number(e.target.value);
