@@ -219,8 +219,17 @@ select.input-field {
 /* ─── LAYOUT ─── */
 .layout-container { display: flex; height: 100vh; overflow: hidden; }
 
+.sidebar-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
 .sidebar {
   width: 260px;
+  height: 100%;
+  max-height: 100vh;
   background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -309,9 +318,10 @@ tr:hover td { background: rgba(27,99,216,0.04); transition: background 0.15s; }
     width: 260px; height: 100vh;
     z-index: 999;
     transition: left 0.3s ease;
+    display: block; /* Mobile override */
   }
   .sidebar-wrapper.open { left: 0; }
-  .sidebar { height: 100%; }
+  .sidebar { height: 100%; width: 100%; }
 
   .mobile-overlay {
     display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
