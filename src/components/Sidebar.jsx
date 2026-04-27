@@ -41,7 +41,7 @@ export default function Sidebar({ onClose }) {
         <div style={{ width: '32px', height: '32px', background: 'var(--primary-color)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Package size={18} color="white" />
         </div>
-        <h2 style={{ fontSize: '1.25rem', color: 'white', fontWeight: '700', letterSpacing: '1px' }}>INVENTX</h2>
+        <h2 style={{ fontSize: '1.25rem', color: 'var(--text-main)', fontWeight: '800', letterSpacing: '1px' }}>INVENTX</h2>
       </div>
 
       <nav className="custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.5rem' }}>
@@ -80,7 +80,7 @@ export default function Sidebar({ onClose }) {
           {stokOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </button>
         {stokOpen && (
-          <div style={{ background: 'rgba(0,0,0,0.15)' }}>
+          <div style={{ background: 'var(--surface-hover)' }}>
             <NavLink onClick={onClose} to="/stock-documents" style={subNavStyle}>
               <FileText size={17} />
               <span>Stok Giriş&Çıkış</span>
@@ -126,7 +126,7 @@ export default function Sidebar({ onClose }) {
           {finansOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </button>
         {finansOpen && (
-          <div style={{ background: 'rgba(0,0,0,0.15)' }}>
+          <div style={{ background: 'var(--surface-hover)' }}>
             <NavLink onClick={onClose} to="/finance" style={subNavStyle}>
               <Wallet size={17} />
               <span>Finans İşlemleri</span>
@@ -166,8 +166,7 @@ export default function Sidebar({ onClose }) {
       <div style={{ 
         padding: '1rem 1.5rem', 
         borderTop: '1px solid var(--border-color)',
-        flexShrink: 0,
-        background: 'linear-gradient(180deg, #0A1220 0%, #060C18 100%)'
+        flexShrink: 0
       }}>
         {user?.email && (
           <div style={{ 
