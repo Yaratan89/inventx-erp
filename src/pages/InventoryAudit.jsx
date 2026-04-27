@@ -77,21 +77,35 @@ export default function InventoryAudit() {
           scannerRef.current = html5QrCode;
 
           const config = {
-            fps: 20, // Daha hızlı tarama
-            qrbox: { width: 380, height: 150 }, // Barkodlar için yatay dikdörtgen
+            fps: 20,
+            qrbox: { width: 380, height: 150 },
             videoConstraints: {
-              facingMode: 'environment',
               width: { ideal: 1920 },
               height: { ideal: 1080 },
             },
           };
 
-          await html5QrCode.start(
-            { facingMode: { exact: 'environment' } },
-            config,
-            (decodedText) => handleBarcodeScanned(decodedText),
-            () => {} // Başarısız okuma sessiz geç
-          );
+          const cameras = await Html5Qrcode.getCameras();
+          if (cameras && cameras.length > 0) {
+            // Try to find the back camera by checking the label for keywords
+            const backCamera = cameras.find(c => 
+              c.label.toLowerCase().includes('back') || 
+              c.label.toLowerCase().includes('environment') || 
+              c.label.toLowerCase().includes('arka')
+            );
+            
+            // If no back camera is explicitly identified by label, pick the last camera (usually the back one on mobile)
+            const cameraIdToUse = backCamera ? backCamera.id : cameras[cameras.length - 1].id;
+
+            await html5QrCode.start(
+              cameraIdToUse,
+              config,
+              (decodedText) => handleBarcodeScanned(decodedText),
+              () => {} // Başarısız okuma sessiz geç
+            );
+          } else {
+            throw new Error('Cihazda kamera bulunamadı.');
+          }
         } catch (err) {
           console.error('Kamera başlatma hatası:', err);
           setScanFeedback({ text: 'Kamera açılamadı. Elle giriş kullanın.', type: 'error' });
