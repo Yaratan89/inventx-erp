@@ -63,7 +63,11 @@ export default function Personnel() {
       // 2. Profiles tablosuna rol kaydı ekle
       const { error: profileError } = await supabase
         .from('profiles')
-        .upsert([{ id: newUserId, email: userForm.email, role: userForm.role.toLowerCase() }]);
+        .upsert([{ 
+          id: newUserId, 
+          role: userForm.role.toLowerCase(),
+          full_name: userForm.full_name 
+        }]);
 
       if (profileError) throw new Error('Profil oluşturulamadı: ' + profileError.message);
 
