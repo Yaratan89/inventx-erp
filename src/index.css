@@ -269,3 +269,40 @@ tr:hover td { background: rgba(27,99,216,0.04); transition: background 0.15s; }
   .label-large { width: 100mm; height: 50mm; }
 }
 .no-print { @media print { display: none !important; } }
+
+/* ─── MOBİL UYUM (RESPONSIVE) ─── */
+.mobile-menu-btn { display: none; background: transparent; border: none; cursor: pointer; padding: 0.2rem; }
+.mobile-overlay { display: none; }
+
+@media (max-width: 768px) {
+  .mobile-menu-btn { display: block; }
+  
+  .sidebar-wrapper {
+    position: fixed;
+    top: 0; left: -260px;
+    width: 260px; height: 100vh;
+    z-index: 999;
+    transition: left 0.3s ease;
+  }
+  .sidebar-wrapper.open { left: 0; }
+  .sidebar { height: 100%; }
+
+  .mobile-overlay {
+    display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.5); z-index: -1;
+    opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+  }
+  .sidebar-wrapper.open .mobile-overlay { opacity: 1; pointer-events: auto; }
+
+  .layout-container { display: flex; flex-direction: column; }
+  .main-content { padding: 1rem; }
+  
+  /* Form ve Gridlerin tek kolona düşmesi */
+  .grid, .card-grid, [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+  .header-actions { flex-direction: column; width: 100%; gap: 1rem; }
+  .header-actions > * { width: 100%; }
+  
+  .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}

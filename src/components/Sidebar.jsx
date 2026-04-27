@@ -3,7 +3,7 @@ import { LayoutDashboard, Package, FileText, Settings, Settings2, LogOut, MapPin
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }) {
   const { signOut, isAdmin } = useAuth();
   const [stokOpen, setStokOpen] = useState(true);
   const [finansOpen, setFinansOpen] = useState(true);
@@ -45,19 +45,19 @@ export default function Sidebar() {
       </div>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', flex: 1, overflowY: 'auto' }}>
-        <NavLink to="/" style={navStyle}>
+        <NavLink onClick={onClose} to="/" style={navStyle}>
           <LayoutDashboard size={20} />
           <span>Dashboard</span>
         </NavLink>
-        <NavLink to="/reports" style={navStyle}>
+        <NavLink onClick={onClose} to="/reports" style={navStyle}>
           <TrendingUp size={20} />
           <span>Raporlar</span>
         </NavLink>
-        <NavLink to="/products" style={navStyle}>
+        <NavLink onClick={onClose} to="/products" style={navStyle}>
           <Box size={20} />
           <span>Ürün Yönetimi</span>
         </NavLink>
-        <NavLink to="/accounts" style={navStyle}>
+        <NavLink onClick={onClose} to="/accounts" style={navStyle}>
           <Users size={20} />
           <span>Cari Takip</span>
         </NavLink>
@@ -81,30 +81,30 @@ export default function Sidebar() {
         </button>
         {stokOpen && (
           <div style={{ background: 'rgba(0,0,0,0.15)' }}>
-            <NavLink to="/stock-documents" style={subNavStyle}>
+            <NavLink onClick={onClose} to="/stock-documents" style={subNavStyle}>
               <FileText size={17} />
               <span>Stok Giriş&Çıkış</span>
             </NavLink>
-            <NavLink to="/audit" style={subNavStyle}>
+            <NavLink onClick={onClose} to="/audit" style={subNavStyle}>
               <RefreshCw size={17} />
               <span>Stok Sayım</span>
             </NavLink>
-            <NavLink to="/returns" style={subNavStyle}>
+            <NavLink onClick={onClose} to="/returns" style={subNavStyle}>
               <RotateCcw size={17} />
               <span>İade İşlemleri</span>
             </NavLink>
-            <NavLink to="/document-report" style={subNavStyle}>
+            <NavLink onClick={onClose} to="/document-report" style={subNavStyle}>
               <FileText size={17} />
               <span>Belge Raporu</span>
             </NavLink>
-            <NavLink to="/transfers" style={subNavStyle}>
+            <NavLink onClick={onClose} to="/transfers" style={subNavStyle}>
               <ArrowRightLeft size={17} />
               <span>Transferler</span>
             </NavLink>
           </div>
         )}
 
-        <NavLink to="/labels" style={navStyle}>
+        <NavLink onClick={onClose} to="/labels" style={navStyle}>
           <Tag size={20} />
           <span>Etiket Tasarımı</span>
         </NavLink>
@@ -127,35 +127,35 @@ export default function Sidebar() {
         </button>
         {finansOpen && (
           <div style={{ background: 'rgba(0,0,0,0.15)' }}>
-            <NavLink to="/finance" style={subNavStyle}>
+            <NavLink onClick={onClose} to="/finance" style={subNavStyle}>
               <Wallet size={17} />
               <span>Finans İşlemleri</span>
             </NavLink>
-            <NavLink to="/tax-report" style={subNavStyle}>
+            <NavLink onClick={onClose} to="/tax-report" style={subNavStyle}>
               <Scale size={17} />
               <span>KDV Raporu</span>
             </NavLink>
           </div>
         )}
-        <NavLink to="/locations" style={navStyle}>
+        <NavLink onClick={onClose} to="/locations" style={navStyle}>
           <MapPin size={20} />
           <span>Lokasyonlar</span>
         </NavLink>
-        <NavLink to="/audit-logs" style={navStyle}>
+        <NavLink onClick={onClose} to="/audit-logs" style={navStyle}>
           <FileText size={20} />
           <span>Denetim İzi</span>
         </NavLink>
         {isAdmin && (
           <>
-            <NavLink to="/integrations" style={navStyle}>
+            <NavLink onClick={onClose} to="/integrations" style={navStyle}>
               <Settings2 size={20} />
               <span>Entegrasyonlar</span>
             </NavLink>
-            <NavLink to="/personnel" style={navStyle}>
+            <NavLink onClick={onClose} to="/personnel" style={navStyle}>
               <UserCheck size={20} />
               <span>Personel Yönetimi</span>
             </NavLink>
-            <NavLink to="/settings" style={navStyle}>
+            <NavLink onClick={onClose} to="/settings" style={navStyle}>
               <Settings size={20} />
               <span>Ayarlar</span>
             </NavLink>

@@ -87,7 +87,7 @@ export default function InventoryAudit() {
           };
 
           await html5QrCode.start(
-            { facingMode: 'environment' },
+            { facingMode: { exact: 'environment' } },
             config,
             (decodedText) => handleBarcodeScanned(decodedText),
             () => {} // Başarısız okuma sessiz geç
