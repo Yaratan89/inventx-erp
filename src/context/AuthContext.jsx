@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }) => {
         const defaultRole = userId ? 'admin' : 'staff'; 
         const { error: insertError } = await supabase
           .from('profiles')
-          .insert([{ id: userId, email: userEmail, role: defaultRole }]);
+          .insert([{ id: userId, role: defaultRole }]);
         
         if (!insertError) setRole(defaultRole);
       }

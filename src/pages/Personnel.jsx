@@ -60,13 +60,12 @@ export default function Personnel() {
       const newUserId = authData?.user?.id;
       if (!newUserId) throw new Error('Kullanıcı ID alınamadı.');
 
-      // 2. Profiles tablosuna rol kaydı ekle
+      // 2. Profiles tablosuna rol kaydı ekle (Sadece zorunlu alanlar: id ve role)
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert([{ 
           id: newUserId, 
-          role: userForm.role.toLowerCase(),
-          full_name: userForm.full_name 
+          role: userForm.role.toLowerCase()
         }]);
 
       if (profileError) throw new Error('Profil oluşturulamadı: ' + profileError.message);

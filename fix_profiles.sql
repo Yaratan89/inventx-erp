@@ -22,3 +22,6 @@ CREATE POLICY "Admins can do everything on profiles" ON profiles FOR ALL USING (
     SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
   )
 );
+
+-- ÖNEMLİ: Supabase şema önbelleğini yenilemek için bu komutu da çalıştırın
+NOTIFY pgrst, 'reload schema';
