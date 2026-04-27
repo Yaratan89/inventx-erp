@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Users, UserPlus, Shield, Edit3, Trash2, X, CheckCircle, Wallet, History, ArrowDownRight } from 'lucide-react';
+import { Users, UserPlus, Shield, Edit3, Trash2, X, CheckCircle, Wallet, History, Key } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Personnel() {
@@ -11,9 +11,14 @@ export default function Personnel() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [form, setForm] = useState({ id: null, full_name: '', phone: '', role: 'Staff', is_active: true, party_id: null });
   const [payForm, setPayForm] = useState({ amount: 0, description: '', method: 'Cash', date: format(new Date(), 'yyyy-MM-dd') });
+  const [userForm, setUserForm] = useState({ email: '', password: '', full_name: '', role: 'Staff' });
+  const [userError, setUserError] = useState('');
+  const [userSuccess, setUserSuccess] = useState('');
+  const [userLoading, setUserLoading] = useState(false);
 
   useEffect(() => {
     fetchInitialData();
@@ -33,12 +38,60 @@ export default function Personnel() {
     setLoading(false);
   };
 
+  // Admin tarafından yeni kullanıcı oluşturma
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setUserError('');
+    setUserSuccess('');
+    setUserLoading(true);
+
+    try {
+      // 1. Supabase Auth'da kullanıcı oluştur (signUp ile)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: userForm.email,
+        password: userForm.password,
+        options: {
+          data: { full_name: userForm.full_name }
+        }
+      });
+
+      if (authError) throw new Error('Kullanıcı oluşturulamadı: ' + authError.message);
+
+      const newUserId = authData?.user?.id;
+      if (!newUserId) throw new Error('Kullanıcı ID alınamadı.');
+
+      // 2. Profiles tablosuna rol kaydı ekle
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert([{ id: newUserId, email: userForm.email, role: userForm.role.toLowerCase() }]);
+
+      if (profileError) throw new Error('Profil oluşturulamadı: ' + profileError.message);
+
+      // 3. Personnel tablosuna da ekle
+      const partyPayload = { name: userForm.full_name, type: 'Employee' };
+      const { data: newParty } = await supabase.from('parties').insert([partyPayload]).select().single();
+      await supabase.from('personnel').insert([{
+        full_name: userForm.full_name,
+        role: userForm.role,
+        is_active: true,
+        party_id: newParty?.id || null
+      }]);
+
+      setUserSuccess(`✅ Kullanıcı başarıyla oluşturuldu! ${userForm.email} artık sisteme giriş yapabilir.`);
+      setUserForm({ email: '', password: '', full_name: '', role: 'Staff' });
+      fetchInitialData();
+    } catch (err) {
+      setUserError(err.message);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     let p_id = form.party_id;
 
     try {
-        // 1. Önce Cari Kartını Oluştur/Güncelle (Finansal entegrasyon için)
         const partyPayload = { name: form.full_name, type: 'Employee', phone: form.phone };
         if (p_id) {
            const { error: pErr } = await supabase.from('parties').update(partyPayload).eq('id', p_id);
@@ -49,7 +102,6 @@ export default function Personnel() {
            if (newParty) p_id = newParty.id;
         }
 
-        // 2. Personel Kartını Kaydet
         const staffPayload = { full_name: form.full_name, phone: form.phone, role: form.role, is_active: form.is_active, party_id: p_id };
         const { error: sErr } = form.id 
           ? await supabase.from('personnel').update(staffPayload).eq('id', form.id)
@@ -61,7 +113,7 @@ export default function Personnel() {
         fetchInitialData();
     } catch (err) {
         console.error(err);
-        alert(err.message + "\n\nNot: Eğer 'column party_id does not exist' hatası alıyorsanız, lütfen size verdiğim SQL kodunu Supabase'de çalıştırın.");
+        alert(err.message);
     }
   };
 
@@ -69,7 +121,6 @@ export default function Personnel() {
     e.preventDefault();
     if (!selectedStaff?.party_id) return;
 
-    // Finansal kaydı ekle (Gider olarak)
     const { error } = await supabase.from('income_expenses').insert([{
         type: 'expense',
         category: 'Personel Maaş/Ödeme',
@@ -93,33 +144,36 @@ export default function Personnel() {
     if (!partyId) return 0;
     const ptIE = incomeExpenses.filter(r => r.party_id === partyId);
     const ptTX = transactions.filter(t => t.party_id === partyId);
-    
     const totalPaid = ptIE.filter(r => r.type === 'expense').reduce((s, r) => s + Number(r.amount), 0);
     const totalTxs = ptTX.filter(t => t.type === 'Payment').reduce((s, t) => s + Number(t.amount), 0);
-    
-    return totalPaid + totalTxs; // Basitçe personele giden toplam para
+    return totalPaid + totalTxs;
   };
 
   const deleteStaff = async (id) => {
     if (confirm('Bu personeli silmek istediğinize emin misiniz?')) {
       await supabase.from('personnel').delete().eq('id', id);
-      fetchStaff();
+      fetchInitialData();
     }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h2 style={{ fontSize: '1.8rem', fontWeight: '700' }}>Personel & Yetkilendirme</h2>
-          <p style={{ color: 'var(--text-muted)' }}>Ekibinizi yönetin ve erişim yetkilerini belirleyin.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Ekibinizi yönetin ve sisteme erişim yetkilerini belirleyin.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setForm({ id: null, full_name: '', phone: '', role: 'Staff', is_active: true }); setShowModal(true); }}>
-          <UserPlus size={18} /> Yeni Personel Ekle
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={() => { setUserError(''); setUserSuccess(''); setShowUserModal(true); }}>
+            <Key size={18} /> Sisteme Kullanıcı Ekle
+          </button>
+          <button className="btn btn-primary" onClick={() => { setForm({ id: null, full_name: '', phone: '', role: 'Staff', is_active: true }); setShowModal(true); }}>
+            <UserPlus size={18} /> Personel Kartı Ekle
+          </button>
+        </div>
       </div>
 
-      <div className="card" style={{ padding: 0 }}>
+      <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
@@ -137,7 +191,7 @@ export default function Personnel() {
                 <td style={{ padding: '1rem', fontWeight: '600' }}>{p.full_name}</td>
                 <td style={{ padding: '1rem' }}>{p.phone || '-'}</td>
                 <td style={{ padding: '1rem', textAlign: 'center' }}>
-                  <span className={`badge ${p.role === 'Admin' ? 'badge-primary' : 'badge-secondary'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span className={`badge ${p.role === 'Admin' ? 'badge-primary' : p.role === 'Manager' ? 'badge-gold' : 'badge-secondary'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
                     <Shield size={12} /> {p.role}
                   </span>
                 </td>
@@ -156,6 +210,9 @@ export default function Personnel() {
                 </td>
               </tr>
             ))}
+            {staff.length === 0 && !loading && (
+              <tr><td colSpan="6" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Henüz personel eklenmemiş.</td></tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -193,9 +250,62 @@ export default function Personnel() {
         </div>
       )}
 
+      {/* Sisteme Kullanıcı Ekle Modalı */}
+      {showUserModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '460px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <div>
+                <h3 style={{ fontWeight: '700', fontSize: '1.1rem' }}>🔐 Sisteme Yeni Kullanıcı Ekle</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.2rem' }}>Bu kullanıcı belirlediğiniz e-posta ve şifreyle giriş yapabilecek.</p>
+              </div>
+              <button className="btn btn-secondary" onClick={() => setShowUserModal(false)}><X size={20}/></button>
+            </div>
+
+            {userError && (
+              <div style={{ background: 'var(--danger-light)', color: 'var(--danger-color)', padding: '0.75rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', marginBottom: '1rem', border: '1px solid var(--danger-color)' }}>
+                {userError}
+              </div>
+            )}
+            {userSuccess && (
+              <div style={{ background: 'var(--success-light)', color: 'var(--success-color)', padding: '0.75rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', marginBottom: '1rem', border: '1px solid var(--success-color)' }}>
+                {userSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="input-group">
+                <label>Ad Soyad</label>
+                <input className="input-field" value={userForm.full_name} onChange={e => setUserForm({...userForm, full_name: e.target.value})} placeholder="Örn: Ahmet Yılmaz" required />
+              </div>
+              <div className="input-group">
+                <label>E-posta Adresi (Giriş için kullanılacak)</label>
+                <input type="email" className="input-field" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} placeholder="ahmet@sirket.com" required />
+              </div>
+              <div className="input-group">
+                <label>Şifre (En az 6 karakter)</label>
+                <input type="password" className="input-field" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} placeholder="••••••••" minLength={6} required />
+              </div>
+              <div className="input-group">
+                <label>Yetki Seviyesi</label>
+                <select className="input-field" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})}>
+                  <option value="Staff">Personel — Sadece işlem yapabilir</option>
+                  <option value="Manager">Yönetici — Raporları görebilir</option>
+                  <option value="Admin">Admin — Tam yetki (Kullanıcı ekleyebilir)</option>
+                </select>
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem', padding: '0.875rem' }} disabled={userLoading}>
+                {userLoading ? 'Kullanıcı oluşturuluyor...' : '✅ Kullanıcı Oluştur ve Erişim Ver'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Personel Düzenle Modalı */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="card" style={{ width: '400px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '400px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
               <h3>{form.id ? 'Personel Düzenle' : 'Yeni Personel'}</h3>
               <button className="btn btn-secondary" onClick={() => setShowModal(false)}><X size={20}/></button>
@@ -205,9 +315,9 @@ export default function Personnel() {
               <div className="input-group"><label>Telefon</label><input className="input-field" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
               <div className="input-group"><label>Yetki Rolü</label>
                 <select className="input-field" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
-                  <option value="Staff">Personel (Sadece İşlem)</option>
-                  <option value="Manager">Yönetici (Rapor + Stok)</option>
-                  <option value="Admin">Admin (Tam Yetki)</option>
+                  <option value="Staff">Personel</option>
+                  <option value="Manager">Yönetici</option>
+                  <option value="Admin">Admin</option>
                 </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -219,9 +329,11 @@ export default function Personnel() {
           </div>
         </div>
       )}
+
+      {/* Ödeme Modalı */}
       {showPaymentModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="card" style={{ width: '400px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '400px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
               <h3>💰 Ödeme Yap: {selectedStaff?.full_name}</h3>
               <button className="btn btn-secondary" onClick={() => setShowPaymentModal(false)}><X size={20}/></button>

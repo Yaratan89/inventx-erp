@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 
 export default function Sidebar({ onClose }) {
-  const { signOut, isAdmin } = useAuth();
+  const { signOut, isAdmin, user } = useAuth();
   const [stokOpen, setStokOpen] = useState(true);
   const [finansOpen, setFinansOpen] = useState(true);
 
@@ -163,10 +163,38 @@ export default function Sidebar({ onClose }) {
         )}
       </nav>
 
-      <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-        <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'flex-start', border: 'none' }} onClick={() => signOut()}>
-           <LogOut size={18} />
-           Çıkış Yap
+      <div style={{ 
+        padding: '1rem 1.5rem', 
+        borderTop: '1px solid var(--border-color)',
+        flexShrink: 0,
+        background: 'linear-gradient(180deg, #0A1220 0%, #060C18 100%)'
+      }}>
+        {user?.email && (
+          <div style={{ 
+            padding: '0.6rem 0.75rem', 
+            background: 'var(--surface-hover)', 
+            borderRadius: 'var(--radius-md)', 
+            marginBottom: '0.75rem',
+            fontSize: '0.78rem',
+            color: 'var(--text-muted)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            overflow: 'hidden'
+          }}>
+            <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '0.7rem', fontWeight: '700', color: 'white' }}>
+              {user.email[0].toUpperCase()}
+            </div>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</span>
+          </div>
+        )}
+        <button 
+          className="btn btn-secondary" 
+          style={{ width: '100%', justifyContent: 'flex-start', border: '1px solid var(--border-color)', color: 'var(--danger-color)' }} 
+          onClick={() => { signOut(); onClose && onClose(); }}
+        >
+          <LogOut size={18} />
+          Çıkış Yap
         </button>
       </div>
     </aside>
