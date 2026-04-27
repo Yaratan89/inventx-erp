@@ -44,7 +44,7 @@ export default function Sidebar({ onClose }) {
         <h2 style={{ fontSize: '1.25rem', color: 'white', fontWeight: '700', letterSpacing: '1px' }}>INVENTX</h2>
       </div>
 
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', flex: 1, overflowY: 'auto' }}>
+      <nav className="custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.5rem' }}>
         <NavLink onClick={onClose} to="/" style={navStyle}>
           <LayoutDashboard size={20} />
           <span>Dashboard</span>
