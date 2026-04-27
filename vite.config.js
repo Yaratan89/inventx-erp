@@ -8,12 +8,15 @@ export default defineConfig({
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          charts: ['recharts'],
-          icons: ['lucide-react'],
-          scanner: ['html5-qrcode'],
-          supabase: ['@supabase/supabase-js']
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react')) return 'vendor';
+            if (id.includes('recharts')) return 'charts';
+            if (id.includes('lucide-react')) return 'icons';
+            if (id.includes('html5-qrcode')) return 'scanner';
+            if (id.includes('@supabase')) return 'supabase';
+            return 'vendor-other';
+          }
         }
       }
     }
