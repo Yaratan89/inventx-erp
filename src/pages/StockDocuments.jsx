@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Package, Search, Plus, FileText, Check, Trash2, ArrowRightLeft, DollarSign, Edit3, X, Camera, Zap, Printer } from 'lucide-react';
 import { format } from 'date-fns';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import BarcodeScanner from '../components/BarcodeScanner';
 
 const UNITS = ['Adet', 'KG', 'Çuval', 'Paket', 'Koli', 'Litre', 'Metre', 'Gram', 'Ton', 'Palet', 'Bağ', 'Demet', 'Kutu', 'Teneke', 'Çuval'];
 const UNIQUE_UNITS = [...new Set(UNITS)];
@@ -70,67 +70,7 @@ export default function StockDocuments() {
     } catch (e) {}
   };
 
-  useEffect(() => {
-    Html5Qrcode.getCameras().then(devices => {
-      if (devices && devices.length > 0) {
-        setCameras(devices);
-        setSelectedCameraId(devices[0].id);
-      }
-    }).catch(err => console.error('Kamera listesi alınamadı', err));
-  }, []);
 
-  useEffect(() => {
-    if (!showScanner || !selectedCameraId) {
-      setScannerStatus('Kapalı');
-      return;
-    }
-    let html5QrCode = null;
-    const initScanner = async () => {
-      try {
-        setScannerStatus('Başlatılıyor...');
-        const existingEl = document.getElementById('stock-doc-reader');
-        if (existingEl) existingEl.innerHTML = '';
-        
-        html5QrCode = new Html5Qrcode('stock-doc-reader', { verbose: false });
-        scannerRef.current = html5QrCode;
-        
-        const formats = [
-          Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.CODE_93, Html5QrcodeSupportedFormats.ITF,
-          Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.DATA_MATRIX
-        ];
-
-        await html5QrCode.start(
-          selectedCameraId,
-          {
-            fps: 60,
-            qrbox: (vw, vh) => ({ width: vw * 0.85, height: vh * 0.6 }),
-            aspectRatio: 1.777778,
-          },
-          (decodedText) => {
-            const now = Date.now();
-            if (decodedText === lastScanCode.current && now - lastScanTime.current < 1500) return;
-            
-            lastScanCode.current = decodedText;
-            lastScanTime.current = now;
-            
-            playBeep();
-            setScannerStatus(`✅ OKUNDU: ${decodedText}`);
-            processBarcodeInCart(decodedText);
-          },
-          () => {
-            setScannerStatus('🔍 Barkod Aranıyor...');
-          }
-        );
-      } catch (err) { 
-        setScannerStatus(`❌ HATA: ${err.message}`);
-      }
-    };
-    initScanner();
-    return () => { if (html5QrCode && html5QrCode.isScanning) html5QrCode.stop().catch(() => {}); };
-  }, [showScanner, selectedCameraId]);
 
   useEffect(() => {
     if (!showModal) return;
@@ -893,22 +833,11 @@ export default function StockDocuments() {
                   </div>
 
                   {showScanner && (
-                     <div style={{ marginBottom: '1rem', background: '#000', padding: '10px', borderRadius: '12px' }}>
-                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '10px' }}>
-                            <select 
-                               className="input-field" 
-                               style={{ flex: 1, background: '#222', color: '#fff', border: '1px solid #444', fontSize: '0.8rem' }}
-                               value={selectedCameraId}
-                               onChange={(e) => setSelectedCameraId(e.target.value)}
-                            >
-                               {cameras.map(cam => <option key={cam.id} value={cam.id}>{cam.label || `Kamera ${cam.id.slice(0,5)}`}</option>)}
-                            </select>
-                            <div style={{ background: scannerStatus.includes('✅') ? 'var(--success-color)' : '#444', color: '#fff', padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-                               {scannerStatus}
-                            </div>
-                         </div>
-                         <div id="stock-doc-reader" style={{ borderRadius: '8px', overflow: 'hidden' }}></div>
-                      </div>
+                     <BarcodeScanner
+                       title="Ürün Barkodu Tara"
+                       onScan={(code) => processBarcodeInCart(code)}
+                       onClose={() => setShowScanner(false)}
+                     />
                   )}
 
                   <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>

@@ -3,7 +3,7 @@ import { ShoppingCart, Search, User, Calendar, DollarSign, ArrowDownLeft, FileTe
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { Html5Qrcode } from 'html5-qrcode';
+import BarcodeScanner from '../components/BarcodeScanner';
 
 export default function Sales() {
   const [sales, setSales] = useState([]);
@@ -155,29 +155,16 @@ export default function Sales() {
   };
 
   const startScanner = () => {
-    setIsAddModalOpen(true);
     setShowScanner(true);
-    setTimeout(() => {
-      const html5QrCode = new Html5Qrcode("sale-scanner");
-      scannerRef.current = html5QrCode;
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 150 } },
-        (decodedText) => {
-          const product = products.find(p => p.barcode === decodedText || p.sku === decodedText);
-          if (product) {
-            setSaleData(prev => ({ ...prev, product_id: product.id, price: product.price }));
-            html5QrCode.stop().then(() => setShowScanner(false));
-            alert(`Ürün Bulundu: ${product.name}`);
-          }
-        },
-        () => {}
-      ).catch(err => {
-        console.error("Kamera başlatılamadı:", err);
-        alert("Kamera erişimi reddedildi veya bulunamadı.");
-        setShowScanner(false);
-      });
-    }, 300);
+  };
+
+  const handleBarcodeScan = (decodedText) => {
+    const product = products.find(p => p.barcode === decodedText || p.sku === decodedText);
+    if (product) {
+      setSaleData(prev => ({ ...prev, product_id: product.id, price: product.price }));
+      setShowScanner(false);
+    }
+    // Ürün bulunamazsa taramaya devam et (kapat butonu ile çıkılır)
   };
 
   const handlePrint = (sale) => {
@@ -557,3 +544,4 @@ export default function Sales() {
     </div>
   );
 }
+

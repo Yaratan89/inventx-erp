@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, Camera, CheckCircle2, AlertCircle, Plus, X, History, Warehouse, Zap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import BarcodeScanner from '../components/BarcodeScanner';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
@@ -53,72 +53,7 @@ export default function InventoryAudit() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [activeCount, countItems, products]);
 
-  // Kamera tarayıcı başlat/durdur
-  useEffect(() => {
-    if (showScanner) {
-      const initScanner = async () => {
-        try {
-          // Tüm barkod formatlarını destekle (CODE-128, EAN-13, UPC-A, QR vb.)
-          const formatsToSupport = [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.ITF,
-          ];
 
-          const html5QrCode = new Html5Qrcode('audit-reader', {
-            formatsToSupport,
-            verbose: false,
-          });
-          scannerRef.current = html5QrCode;
-
-          const config = {
-            fps: 20,
-            qrbox: { width: 380, height: 150 },
-            videoConstraints: {
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-            },
-          };
-
-          const cameras = await Html5Qrcode.getCameras();
-          if (cameras && cameras.length > 0) {
-            // Try to find the back camera by checking the label for keywords
-            const backCamera = cameras.find(c => 
-              c.label.toLowerCase().includes('back') || 
-              c.label.toLowerCase().includes('environment') || 
-              c.label.toLowerCase().includes('arka')
-            );
-            
-            // If no back camera is explicitly identified by label, pick the last camera (usually the back one on mobile)
-            const cameraIdToUse = backCamera ? backCamera.id : cameras[cameras.length - 1].id;
-
-            await html5QrCode.start(
-              cameraIdToUse,
-              config,
-              (decodedText) => handleBarcodeScanned(decodedText),
-              () => {} // Başarısız okuma sessiz geç
-            );
-          } else {
-            throw new Error('Cihazda kamera bulunamadı.');
-          }
-        } catch (err) {
-          console.error('Kamera başlatma hatası:', err);
-          setScanFeedback({ text: 'Kamera açılamadı. Elle giriş kullanın.', type: 'error' });
-        }
-      };
-      initScanner();
-    }
-    return () => {
-      if (scannerRef.current && scannerRef.current.isScanning) {
-        scannerRef.current.stop().catch(() => {});
-      }
-    };
-  }, [showScanner]);
 
   const fetchInitialData = async () => {
     const { data: locs } = await supabase.from('locations').select('*').order('name');
@@ -491,53 +426,11 @@ export default function InventoryAudit() {
 
       {/* Barkod Tarayıcı Modal */}
       {showScanner && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.95)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="card glass-panel animate-fade-in" style={{ width: '480px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <div>
-                <h3 style={{ color: 'white', margin: 0 }}>Barkod Tara</h3>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>Barkodu kırmızı çizgiye hizalayın</p>
-              </div>
-              <button className="btn btn-secondary" onClick={() => setShowScanner(false)} style={{ background: 'rgba(255,255,255,0.1)', color: 'white' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', background: '#000' }}>
-              <div id="audit-reader" style={{ width: '100%' }}></div>
-              <div style={{ position: 'absolute', top: '50%', left: '10%', width: '80%', height: '2px', background: 'rgba(255,0,0,0.7)', boxShadow: '0 0 10px red', zIndex: 10, pointerEvents: 'none' }}></div>
-            </div>
-
-            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', marginBottom: '0.5rem', display: 'block' }}>
-                Kamera okumuyorsa elle girin:
-              </label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input
-                  id="audit-manual-input"
-                  type="text"
-                  className="input-field"
-                  style={{ background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', flex: 1 }}
-                  placeholder="Barkod veya SKU..."
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && e.target.value) {
-                      handleManualBarcode(e.target.value);
-                    }
-                  }}
-                />
-                <button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    const val = document.getElementById('audit-manual-input').value;
-                    if (val) handleManualBarcode(val);
-                  }}
-                >
-                  Ara
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BarcodeScanner
+          title="Sayım İçin Barkod Tara"
+          onScan={(code) => handleBarcodeScanned(code)}
+          onClose={() => setShowScanner(false)}
+        />
       )}
     </div>
   );
