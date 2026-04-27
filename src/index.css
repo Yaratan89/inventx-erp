@@ -341,4 +341,9 @@ tr:hover td { background: rgba(27,99,216,0.04); transition: background 0.15s; }
   .header-actions > * { width: 100%; }
   
   .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  
+  .mobile-stack { flex-direction: column !important; gap: 1rem !important; }
+  .mobile-full-width { width: 100% !important; }
+  .mobile-hide { display: none !important; }
 }
+

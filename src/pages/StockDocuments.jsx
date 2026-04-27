@@ -684,8 +684,8 @@ export default function StockDocuments() {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div className="card table-responsive" style={{ padding: 0, overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
           <thead>
              <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                <th style={{ padding: '1rem', textAlign: 'left' }}>Tarih</th>
@@ -802,14 +802,14 @@ export default function StockDocuments() {
       </div>
 
       {showModal && (
-         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
-            <div className="card" style={{ width: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
-               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                  <h3>{activeTab === 'IN' ? 'Alım' : 'Satış'} Belgesi {form.status === 'COMPLETED' && '(Onaylı)'}</h3>
-                  <button className="btn btn-secondary" onClick={() => setShowModal(false)}><X size={20}/></button>
+         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+            <div className="card glass-panel" style={{ width: 'min(900px, 95vw)', maxHeight: '95vh', overflowY: 'auto', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: 'clamp(1.1rem, 4vw, 1.5rem)' }}>{activeTab === 'IN' ? 'Alım' : 'Satış'} Belgesi {form.status === 'COMPLETED' && '(Onaylı)'}</h3>
+                  <button className="btn btn-secondary" style={{ padding: '0.5rem' }} onClick={() => setShowModal(false)}><X size={20}/></button>
                </div>
 
-               <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+               <div className="mobile-stack" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
                   <div className="input-group" style={{ flex: 1 }}><label>Belge No</label><input className="input-field" value={form.document_no} onChange={e => setForm({...form, document_no: e.target.value})} /></div>
                   <div className="input-group" style={{ flex: 1 }}><label>Fatura No</label><input className="input-field" value={form.invoice_no} onChange={e => setForm({...form, invoice_no: e.target.value})} /></div>
                   <div className="input-group" style={{ flex: 1 }}><label>Sorumlu Personel</label>
@@ -853,26 +853,29 @@ export default function StockDocuments() {
                      <button className="btn btn-primary" onClick={() => { processBarcodeInCart(manualBarcodeInput); setManualBarcodeInput(''); }}>Ekle</button>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div className="mobile-stack" style={{ display: 'flex', gap: '1rem' }}>
                      <div className="input-group" style={{ flex: 2 }}><label>Manuel Ürün Seçimi</label>
                         <select className="input-field" value={selectedProduct} onChange={e => handleProductSelect(e.target.value)}>
                            <option value="">Listeden seçin...</option>
                            {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.barcode || p.sku})</option>)}
                         </select>
                      </div>
-                     <div className="input-group" style={{ flex: 1 }}><label>Miktar</label><input type="number" className="input-field" value={itemQty} onChange={e => setItemQty(e.target.value)} /></div>
-                     <div className="input-group" style={{ flex: 1.2 }}>
-                        <label>Birim</label>
-                        <select className="input-field" value={itemUnit} onChange={e => setItemUnit(e.target.value)}>
-                           {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
+                     <div style={{ display: 'flex', gap: '0.5rem', flex: 3 }} className="mobile-stack">
+                        <div className="input-group" style={{ flex: 1 }}><label>Miktar</label><input type="number" className="input-field" value={itemQty} onChange={e => setItemQty(e.target.value)} /></div>
+                        <div className="input-group" style={{ flex: 1.2 }}>
+                           <label>Birim</label>
+                           <select className="input-field" value={itemUnit} onChange={e => setItemUnit(e.target.value)}>
+                              {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                           </select>
+                        </div>
+                        <div className="input-group" style={{ flex: 1 }}><label>Fiyat</label><input type="number" className="input-field" value={itemPrice} onChange={e => setItemPrice(e.target.value)} /></div>
+                        <button className="btn btn-primary mobile-full-width" style={{ height: '42px', alignSelf: 'flex-end' }} onClick={addItemToCart}>Ekle</button>
                      </div>
-                     <div className="input-group" style={{ flex: 1 }}><label>Fiyat</label><input type="number" className="input-field" value={itemPrice} onChange={e => setItemPrice(e.target.value)} /></div>
-                     <button className="btn btn-primary" style={{ height: '42px', alignSelf: 'flex-end' }} onClick={addItemToCart}>Ekle</button>
                   </div>
                </div>
 
-               <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden', marginBottom: '1.5rem' }}>
+               {/* Ürün Listesi - Masaüstü Tablo */}
+               <div className="mobile-hide" style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden', marginBottom: '1.5rem' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                      <thead style={{ background: 'var(--surface-color)', fontSize: '0.8rem' }}>
                         <tr>
@@ -955,15 +958,84 @@ export default function StockDocuments() {
                      </tbody>
                   </table>
                </div>
+ 
+               {/* Ürün Listesi - Mobil Kartlar */}
+               <div className="mobile-only" style={{ display: 'none', marginBottom: '1.5rem' }}>
+                  <style>{`
+                     @media (max-width: 768px) {
+                        .mobile-only { display: block !important; }
+                        .mobile-hide { display: none !important; }
+                     }
+                  `}</style>
+                  {form.items.length === 0 ? (
+                     <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', background: 'var(--bg-color)', borderRadius: '12px' }}>
+                        Henüz ürün eklenmedi.
+                     </div>
+                  ) : (
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {form.items.map((it, idx) => (
+                           <div key={idx} style={{ background: 'var(--surface-color)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)', position: 'relative' }}>
+                              <button 
+                                 style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', color: 'var(--danger-color)', border: 'none', background: 'none', cursor: 'pointer' }}
+                                 onClick={() => removeItemFromCart(idx)}
+                                 disabled={form.status === 'COMPLETED'}
+                              >
+                                 <Trash2 size={18} />
+                              </button>
+                              <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '0.25rem', paddingRight: '2rem' }}>{it.product_name}</div>
+                              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>{it.barcode}</div>
+                              
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                                 <div className="input-group">
+                                    <label>Miktar</label>
+                                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                       <input type="number" className="input-field" value={it.quantity} onChange={e => {
+                                          const val = Number(e.target.value);
+                                          const newItems = [...form.items];
+                                          newItems[idx].quantity = val;
+                                          newItems[idx].tax_amount = val * newItems[idx].unit_price * (newItems[idx].tax_rate || 0) / 100;
+                                          newItems[idx].total_price = val * newItems[idx].unit_price * (1 + (newItems[idx].tax_rate || 0) / 100);
+                                          setForm({...form, items: newItems});
+                                       }} disabled={form.status === 'COMPLETED'} />
+                                       <select className="input-field" style={{ width: '80px' }} value={it.unit} onChange={e => {
+                                          const newItems = [...form.items];
+                                          newItems[idx].unit = e.target.value;
+                                          setForm({...form, items: newItems});
+                                       }} disabled={form.status === 'COMPLETED'}>
+                                          {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                       </select>
+                                    </div>
+                                 </div>
+                                 <div className="input-group">
+                                    <label>Birim Fiyat</label>
+                                    <input type="number" step="0.01" className="input-field" value={it.unit_price} onChange={e => {
+                                       const val = Number(e.target.value);
+                                       const newItems = [...form.items];
+                                       newItems[idx].unit_price = val;
+                                       newItems[idx].tax_amount = newItems[idx].quantity * val * (newItems[idx].tax_rate || 0) / 100;
+                                       newItems[idx].total_price = newItems[idx].quantity * val * (1 + (newItems[idx].tax_rate || 0) / 100);
+                                       setForm({...form, items: newItems});
+                                    }} disabled={form.status === 'COMPLETED'} />
+                                 </div>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-color)', padding: '0.75rem', borderRadius: '8px' }}>
+                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>KDV (%{it.tax_rate}): ₺{ (Number(it.unit_price) * Number(it.quantity) * (Number(it.tax_rate) || 0) / 100).toLocaleString('tr-TR', {minimumFractionDigits: 2}) }</div>
+                                 <div style={{ fontWeight: '700', color: 'var(--primary-color)' }}>₺{ (Number(it.unit_price) * Number(it.quantity) * (1 + (Number(it.tax_rate) || 0) / 100)).toLocaleString('tr-TR', {minimumFractionDigits: 2}) }</div>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  )}
+               </div>
 
-               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                  <div className="input-group" style={{ flex: 1, marginRight: '2rem' }}>
+               <div className="mobile-stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '1.5rem' }}>
+                  <div className="input-group mobile-full-width" style={{ flex: 1 }}>
                       <label>Depo Seçimi {form.status === 'COMPLETED' && <span style={{color:'var(--warning-color)', fontSize:'0.7rem'}}>(Onaylı Belge - Depo Değişirse Stok Aktarılır)</span>}</label>
                       <select className="input-field" value={form.location_id} onChange={e => setForm({...form, location_id: e.target.value})}>
                          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                       </select>
                    </div>
-                  <div style={{ textAlign: 'right', minWidth: '240px' }}>
+                  <div className="mobile-full-width" style={{ textAlign: 'right', minWidth: '240px' }}>
                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1rem', background: 'var(--surface-color)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
                            <span style={{ color: 'var(--text-muted)' }}>Vergiler Hariç:</span>
@@ -978,9 +1050,9 @@ export default function StockDocuments() {
                            <span style={{ fontWeight: '800', fontSize: '1.1rem', color: 'var(--primary-color)' }}>₺{calculateTotal().toLocaleString('tr-TR', {minimumFractionDigits: 2})}</span>
                         </div>
                      </div>
-                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {form.status !== 'COMPLETED' && <button className="btn btn-secondary" onClick={saveDraft}>Taslak Kaydet</button>}
-                        <button className="btn btn-primary" style={{ background: 'var(--success-color)' }} onClick={completeDocument}>✔ İşlemi Onayla</button>
+                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }} className="mobile-stack">
+                        {form.status !== 'COMPLETED' && <button className="btn btn-secondary mobile-full-width" onClick={saveDraft}>Taslak Kaydet</button>}
+                        <button className="btn btn-primary mobile-full-width" style={{ background: 'var(--success-color)' }} onClick={completeDocument}>✔ İşlemi Onayla</button>
                      </div>
                   </div>
                </div>
