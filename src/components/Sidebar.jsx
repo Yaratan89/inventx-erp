@@ -38,8 +38,8 @@ export default function Sidebar({ onClose }) {
 
   return (
     <aside className="sidebar">
-      <div style={{ padding: '0.25rem 1rem 0.75rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <img src="/logo.png" alt="INVENTX" style={{ height: '28px', width: 'auto', objectFit: 'contain' }} onError={(e) => e.target.style.display='none'} />
+      <div style={{ padding: '0.5rem 1rem 1rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <img src="/logo.png" alt="INVENTX" style={{ height: '45px', width: 'auto', maxWidth: '100%', objectFit: 'contain' }} onError={(e) => e.target.style.display='none'} />
       </div>
 
       <nav className="custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.5rem' }}>
