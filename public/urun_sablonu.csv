@@ -1,0 +1,4 @@
+SKU,Barkod,UrunAdi,Kategori,Fiyat,Stok,Lokasyon
+PRD-1001,8691234567801,Örnek Akıllı Saat,Elektronik,150.00,50,Merkez Depo
+PRD-1002,8691234567802,Örnek Kulaklık,Elektronik,45.50,200,Kadıköy Mağaza
+PRD-1003,8691234567803,Özelleştirilmiş Kılıf,Aksesuar,15.99,120,Kadıköy Mağaza
