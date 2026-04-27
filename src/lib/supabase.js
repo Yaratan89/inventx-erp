@@ -1,8 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-// We should use env vars, but as a placeholder we will use dummy config
-// Note: In real app, these should be securely stored in .env like VITE_SUPABASE_URL
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
+// Supabase bağlantı bilgileri — anon key herkese açık public anahtardır
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://kzpzxhaemgevtpagrepy.supabase.co';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_wcMOf0lTkYi16Lxn5ab9Bg_HhHSYUuW';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
