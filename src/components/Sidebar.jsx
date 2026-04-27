@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Package, FileText, Settings, Settings2, LogOut, MapPin, ArrowRightLeft, Users, ShoppingCart, TrendingUp, RefreshCw, Tag, RotateCcw, Wallet, ChevronDown, ChevronRight, Box, Scale, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
+import logo from '../assets/logo.png';
 
 export default function Sidebar({ onClose }) {
   const { signOut, isAdmin, user } = useAuth();
@@ -38,11 +39,8 @@ export default function Sidebar({ onClose }) {
 
   return (
     <aside className="sidebar">
-      <div style={{ padding: '0 1rem 1.25rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <div style={{ width: '28px', height: '28px', background: 'var(--primary-color)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Package size={16} color="white" />
-        </div>
-        <h2 style={{ fontSize: '1.1rem', color: 'var(--text-main)', fontWeight: '800', letterSpacing: '0.5px' }}>INVENTX</h2>
+      <div style={{ padding: '0.25rem 1rem 0.75rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <img src={logo} alt="INVENTX" style={{ height: '28px', width: 'auto', objectFit: 'contain' }} />
       </div>
 
       <nav className="custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.5rem' }}>
