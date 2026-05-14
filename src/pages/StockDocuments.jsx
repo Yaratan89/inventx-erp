@@ -200,13 +200,8 @@ export default function StockDocuments() {
       // Update tax and totals for the modified or new item
       const idxToUpdate = existingIndex >= 0 ? existingIndex : newItems.length - 1;
       const it = newItems[idxToUpdate];
-      if (activeTab === 'OUT') {
-         it.total_price = it.quantity * it.unit_price;
-         it.tax_amount = it.total_price - (it.total_price / (1 + (it.tax_rate || 0) / 100));
-      } else {
-         it.tax_amount = it.quantity * it.unit_price * (it.tax_rate || 0) / 100;
-         it.total_price = it.quantity * it.unit_price + it.tax_amount;
-      }
+      it.tax_amount = it.quantity * it.unit_price * (it.tax_rate || 0) / 100;
+      it.total_price = it.quantity * it.unit_price + it.tax_amount;
 
       return { ...prev, items: newItems };
     });
@@ -304,12 +299,7 @@ export default function StockDocuments() {
     setForm({ ...form, items: newItems });
   };
 
-  const calculateNetTotal = () => form.items.reduce((sum, item) => {
-     const price = Number(item.unit_price) || 0;
-     const qty = Number(item.quantity) || 0;
-     if (activeTab === 'OUT') return sum + ((price * qty) / (1 + (Number(item.tax_rate)||0)/100));
-     return sum + (price * qty);
-  }, 0);
+  const calculateNetTotal = () => form.items.reduce((sum, item) => sum + (Number(item.unit_price) * Number(item.quantity)), 0);
   const calculateTaxTotal = () => form.items.reduce((sum, item) => sum + (Number(item.tax_amount) || 0), 0);
   const calculateTotal = () => form.items.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0);
 
@@ -620,15 +610,9 @@ export default function StockDocuments() {
             <tbody>
               ${itemsList.map(item => {
                  let netLine, taxLine, totalLine;
-                 if (activeTab === 'OUT') {
-                    totalLine = Number(item.unit_price) * Number(item.quantity);
-                    netLine = totalLine / (1 + (Number(item.tax_rate) || 0) / 100);
-                    taxLine = totalLine - netLine;
-                 } else {
-                    netLine = Number(item.unit_price) * Number(item.quantity);
-                    taxLine = netLine * (Number(item.tax_rate) || 0) / 100;
-                    totalLine = netLine + taxLine;
-                 }
+                 netLine = Number(item.unit_price) * Number(item.quantity);
+                 taxLine = netLine * (Number(item.tax_rate) || 0) / 100;
+                 totalLine = netLine + taxLine;
                  return `
                 <tr>
                   <td>
@@ -953,17 +937,23 @@ export default function StockDocuments() {
                      </thead>
                      <tbody>
                         {form.items.map((it, idx) => {
-                           const updateItemValues = (items, index, {qty, price, tax, unit}) => {
+                           const updateItemValues = (items, index, {qty, price, tax, unit, total}) => {
                                const newItems = [...items];
                                const item = newItems[index];
                                if (qty !== undefined) item.quantity = qty;
-                               if (price !== undefined) item.unit_price = price;
                                if (tax !== undefined) item.tax_rate = tax;
                                if (unit !== undefined) item.unit = unit;
 
-                               if (activeTab === 'OUT') {
-                                   item.total_price = Number(item.quantity) * Number(item.unit_price);
-                                   item.tax_amount = item.total_price - (item.total_price / (1 + (Number(item.tax_rate) || 0) / 100));
+                               if (total !== undefined) {
+                                   item.total_price = total;
+                                   const net = total / (1 + (Number(item.tax_rate) || 0) / 100);
+                                   item.unit_price = net / (Number(item.quantity) || 1);
+                                   item.tax_amount = total - net;
+                               } else if (price !== undefined) {
+                                   item.unit_price = price;
+                                   const net = Number(item.quantity) * Number(item.unit_price);
+                                   item.tax_amount = net * (Number(item.tax_rate) || 0) / 100;
+                                   item.total_price = net + item.tax_amount;
                                } else {
                                    const net = Number(item.quantity) * Number(item.unit_price);
                                    item.tax_amount = net * (Number(item.tax_rate) || 0) / 100;
@@ -1009,8 +999,8 @@ export default function StockDocuments() {
                                  ₺{(it.tax_amount || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2})}
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'right', fontWeight: '700' }}>
-                                 <div>₺{(it.total_price || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2})}</div>
-                                 <small style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>vergiler dahil</small>
+                                 <input type="number" step="0.01" className="input-field" style={{ width: '90px', padding: '2px', textAlign: 'right', display: 'inline-block', fontWeight: '700', color: 'var(--primary-color)' }} value={it.total_price || 0} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {total: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
+                                 <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '2px' }}>vergiler dahil</div>
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'center' }}>
                                  <button style={{ color: 'var(--danger-color)', border: 'none', background: 'none', cursor: 'pointer', opacity: form.status === 'COMPLETED' ? 0.5 : 1 }} onClick={() => removeItemFromCart(idx)} disabled={form.status === 'COMPLETED'}><Trash2 size={16} /></button>
@@ -1036,16 +1026,24 @@ export default function StockDocuments() {
                   ) : (
                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         {form.items.map((it, idx) => {
-                           const updateItemValues = (items, index, {qty, price, tax, unit}) => {
+                           const updateItemValues = (items, index, {qty, price, tax, unit, total}) => {
                                const newItems = [...items];
                                const item = newItems[index];
                                if (qty !== undefined) item.quantity = qty;
-                               if (price !== undefined) item.unit_price = price;
                                if (tax !== undefined) item.tax_rate = tax;
                                if (unit !== undefined) item.unit = unit;
-                               if (activeTab === 'OUT') {
-                                   item.total_price = Number(item.quantity) * Number(item.unit_price);
-                                   item.tax_amount = item.total_price - (item.total_price / (1 + (Number(item.tax_rate) || 0) / 100));
+
+                               if (total !== undefined) {
+                                   item.total_price = total;
+                                   const taxRate = Number(item.tax_rate) || 0;
+                                   const net = total / (1 + (taxRate / 100));
+                                   item.unit_price = net / (Number(item.quantity) || 1);
+                                   item.tax_amount = total - net;
+                               } else if (price !== undefined) {
+                                   item.unit_price = price;
+                                   const net = Number(item.quantity) * Number(item.unit_price);
+                                   item.tax_amount = net * (Number(item.tax_rate) || 0) / 100;
+                                   item.total_price = net + item.tax_amount;
                                } else {
                                    const net = Number(item.quantity) * Number(item.unit_price);
                                    item.tax_amount = net * (Number(item.tax_rate) || 0) / 100;
@@ -1082,7 +1080,7 @@ export default function StockDocuments() {
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-color)', padding: '0.75rem', borderRadius: '8px' }}>
                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>KDV (%{it.tax_rate || 0}): ₺{ (it.tax_amount || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2}) }</div>
-                                 <div style={{ fontWeight: '700', color: 'var(--primary-color)' }}>₺{ (it.total_price || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2}) }</div>
+                                 <div><input type="number" step="0.01" className="input-field" style={{ width: '90px', padding: '2px', textAlign: 'right', fontWeight: '700', color: 'var(--primary-color)' }} value={it.total_price || 0} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {total: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} /></div>
                               </div>
                            </div>
                         )})}
