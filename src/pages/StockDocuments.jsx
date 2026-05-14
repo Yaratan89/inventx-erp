@@ -183,12 +183,7 @@ export default function StockDocuments() {
       const existingIndex = prev.items.findIndex(i => i.product_id === prd.id);
       const newItems = [...prev.items];
       if (existingIndex >= 0) {
-        newItems[existingIndex] = {
-          ...newItems[existingIndex],
-          quantity: newItems[existingIndex].quantity + 1,
-          tax_amount: (newItems[existingIndex].quantity + 1) * newItems[existingIndex].unit_price * (newItems[existingIndex].tax_rate || 20) / 100,
-          total_price: (newItems[existingIndex].quantity + 1) * newItems[existingIndex].unit_price * (1 + (newItems[existingIndex].tax_rate || 20) / 100)
-        };
+        newItems[existingIndex].quantity += 1;
       } else {
         newItems.push({
           product_id: prd.id,
@@ -198,10 +193,21 @@ export default function StockDocuments() {
           unit_price: price,
           tax_rate: prd.tax_rate || 20,
           unit: prd.unit || 'Adet',
-          tax_amount: price * (prd.tax_rate || 20) / 100,
-          total_price: price * (1 + (prd.tax_rate || 20) / 100)
+          sale_price: prd.price || 0
         });
       }
+      
+      // Update tax and totals for the modified or new item
+      const idxToUpdate = existingIndex >= 0 ? existingIndex : newItems.length - 1;
+      const it = newItems[idxToUpdate];
+      if (activeTab === 'OUT') {
+         it.total_price = it.quantity * it.unit_price;
+         it.tax_amount = it.total_price - (it.total_price / (1 + (it.tax_rate || 0) / 100));
+      } else {
+         it.tax_amount = it.quantity * it.unit_price * (it.tax_rate || 0) / 100;
+         it.total_price = it.quantity * it.unit_price + it.tax_amount;
+      }
+
       return { ...prev, items: newItems };
     });
   };
@@ -298,9 +304,14 @@ export default function StockDocuments() {
     setForm({ ...form, items: newItems });
   };
 
-  const calculateNetTotal = () => form.items.reduce((sum, item) => sum + (Number(item.unit_price) * Number(item.quantity)), 0);
-  const calculateTaxTotal = () => form.items.reduce((sum, item) => sum + (Number(item.unit_price) * Number(item.quantity) * (Number(item.tax_rate) || 0) / 100), 0);
-  const calculateTotal = () => calculateNetTotal() + calculateTaxTotal();
+  const calculateNetTotal = () => form.items.reduce((sum, item) => {
+     const price = Number(item.unit_price) || 0;
+     const qty = Number(item.quantity) || 0;
+     if (activeTab === 'OUT') return sum + ((price * qty) / (1 + (Number(item.tax_rate)||0)/100));
+     return sum + (price * qty);
+  }, 0);
+  const calculateTaxTotal = () => form.items.reduce((sum, item) => sum + (Number(item.tax_amount) || 0), 0);
+  const calculateTotal = () => form.items.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0);
 
   const saveDraft = async () => {
     try {
@@ -426,17 +437,49 @@ export default function StockDocuments() {
         }
       }
 
-      if (form.party_id && totalAmt > 0 && form.status === 'DRAFT') {
+      // Finansal İşlemi Güncelle veya Oluştur
+      if (form.party_id && totalAmt > 0) {
         const type = activeTab === 'IN' ? 'Purchase_Debt' : 'Sale_Credit';
         const desc = `Toplu ${activeTab === 'IN' ? 'Alım' : 'Satış'} - ${form.items.length} kalem. No: ${form.document_no}`;
         
-        await supabase.from('financial_transactions').insert([{
-          party_id: form.party_id,
-          amount: totalAmt,
-          type: type,
-          method: 'Cash',
-          description: desc
-        }]);
+        if (form.status === 'COMPLETED') {
+           // Güncelleme: Eski işlemi bul ve güncelle
+           const { data: existingTx } = await supabase.from('financial_transactions')
+                .select('id')
+                .like('description', `%No: ${form.document_no}%`)
+                .limit(1);
+
+           if (existingTx && existingTx.length > 0) {
+                await supabase.from('financial_transactions').update({
+                   party_id: form.party_id,
+                   amount: totalAmt,
+                   type: type,
+                   description: desc
+                }).eq('id', existingTx[0].id);
+           } else {
+                await supabase.from('financial_transactions').insert([{
+                  party_id: form.party_id,
+                  amount: totalAmt,
+                  type: type,
+                  method: 'Cash',
+                  description: desc
+                }]);
+           }
+        } else {
+            // İlk onay (DRAFT'tan COMPLETED'a geçerken)
+            await supabase.from('financial_transactions').insert([{
+              party_id: form.party_id,
+              amount: totalAmt,
+              type: type,
+              method: 'Cash',
+              description: desc
+            }]);
+        }
+      } else if (!form.party_id && form.status === 'COMPLETED') {
+           // Cari silinmişse, ilgili finansal işlemi de temizle
+           await supabase.from('financial_transactions')
+                .delete()
+                .like('description', `%No: ${form.document_no}%`);
       }
 
       const payload = {
@@ -533,7 +576,7 @@ export default function StockDocuments() {
         <body>
           <div class="header">
             <div class="company-info">
-              <h1>INVENTX ERP</h1>
+              <img src="${window.location.origin}/lundberg-logo.png" alt="LUNDBERG FARM GIDA" style="height: 80px; max-width: 250px; object-fit: contain; margin-bottom: 8px;" />
               <div class="company-details">
                 <p style="margin:0">Dijital İşletme Yönetimi</p>
               </div>
@@ -575,7 +618,18 @@ export default function StockDocuments() {
               </tr>
             </thead>
             <tbody>
-              ${itemsList.map(item => `
+              ${itemsList.map(item => {
+                 let netLine, taxLine, totalLine;
+                 if (activeTab === 'OUT') {
+                    totalLine = Number(item.unit_price) * Number(item.quantity);
+                    netLine = totalLine / (1 + (Number(item.tax_rate) || 0) / 100);
+                    taxLine = totalLine - netLine;
+                 } else {
+                    netLine = Number(item.unit_price) * Number(item.quantity);
+                    taxLine = netLine * (Number(item.tax_rate) || 0) / 100;
+                    totalLine = netLine + taxLine;
+                 }
+                 return `
                 <tr>
                   <td>
                     <strong style="color: #0f172a; display: block; margin-bottom: 4px;">${item.product_name}</strong>
@@ -583,10 +637,10 @@ export default function StockDocuments() {
                   </td>
                   <td style="text-align: center; font-weight: 600;">${item.quantity} ${item.unit || 'Adet'}</td>
                   <td style="text-align: right">₺${Number(item.unit_price).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                  <td style="text-align: right; color: #64748b;">₺${Number(item.tax_amount || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                  <td style="text-align: right; font-weight: 700; color: #0f172a;">₺${Number(item.total_price || (item.quantity * item.unit_price)).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                  <td style="text-align: right; color: #64748b;">₺${taxLine.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                  <td style="text-align: right; font-weight: 700; color: #0f172a;">₺${totalLine.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
                 </tr>
-              `).join('')}
+              `}).join('')}
             </tbody>
           </table>
 
@@ -600,11 +654,11 @@ export default function StockDocuments() {
             <div class="totals-box">
               <div class="total-row">
                 <span>Ara Toplam (KDV Hariç)</span>
-                <span style="font-weight: 600;">₺${itemsList.reduce((sum, it) => sum + (Number(it.unit_price) * Number(it.quantity)), 0).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                <span style="font-weight: 600;">₺${calculateNetTotal().toLocaleString(undefined, {minimumFractionDigits:2})}</span>
               </div>
               <div class="total-row">
                 <span>Toplam KDV</span>
-                <span style="font-weight: 600;">₺${itemsList.reduce((sum, it) => sum + Number(it.tax_amount || 0), 0).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                <span style="font-weight: 600;">₺${calculateTaxTotal().toLocaleString(undefined, {minimumFractionDigits:2})}</span>
               </div>
               <div class="total-row grand-total">
                 <span style="color: #0f172a;">GENEL TOPLAM</span>
@@ -899,9 +953,24 @@ export default function StockDocuments() {
                      </thead>
                      <tbody>
                         {form.items.map((it, idx) => {
-                           const netLine = Number(it.unit_price) * Number(it.quantity);
-                           const taxLine = netLine * (Number(it.tax_rate) || 0) / 100;
-                           const totalLine = netLine + taxLine;
+                           const updateItemValues = (items, index, {qty, price, tax, unit}) => {
+                               const newItems = [...items];
+                               const item = newItems[index];
+                               if (qty !== undefined) item.quantity = qty;
+                               if (price !== undefined) item.unit_price = price;
+                               if (tax !== undefined) item.tax_rate = tax;
+                               if (unit !== undefined) item.unit = unit;
+
+                               if (activeTab === 'OUT') {
+                                   item.total_price = Number(item.quantity) * Number(item.unit_price);
+                                   item.tax_amount = item.total_price - (item.total_price / (1 + (Number(item.tax_rate) || 0) / 100));
+                               } else {
+                                   const net = Number(item.quantity) * Number(item.unit_price);
+                                   item.tax_amount = net * (Number(item.tax_rate) || 0) / 100;
+                                   item.total_price = net + item.tax_amount;
+                               }
+                               return newItems;
+                           };
                            return (
                            <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                               <td style={{ padding: '0.8rem' }}>
@@ -909,64 +978,38 @@ export default function StockDocuments() {
                                  <small style={{ color: 'var(--text-muted)' }}>{it.barcode}</small>
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'center' }}>
-                                 <input type="number" className="input-field" style={{ width: '55px', padding: '2px', textAlign: 'center' }} value={it.quantity} onChange={e => {
-                                    const val = Number(e.target.value);
-                                    const newItems = [...form.items];
-                                    newItems[idx].quantity = val;
-                                    newItems[idx].tax_amount = val * newItems[idx].unit_price * (newItems[idx].tax_rate || 0) / 100;
-                                    newItems[idx].total_price = val * newItems[idx].unit_price * (1 + (newItems[idx].tax_rate || 0) / 100);
-                                    setForm({...form, items: newItems});
-                                 }} disabled={form.status === 'COMPLETED'} />
+                                 <input type="number" className="input-field" style={{ width: '55px', padding: '2px', textAlign: 'center' }} value={it.quantity} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {qty: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
                                  <select 
                                     className="input-field" 
                                     style={{ width: '65px', padding: '2px', fontSize: '0.7rem', marginLeft: '4px' }}
                                     value={it.unit}
-                                    onChange={e => {
-                                       const newItems = [...form.items];
-                                       newItems[idx].unit = e.target.value;
-                                       setForm({...form, items: newItems});
-                                    }}
+                                    onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {unit: e.target.value})})}
                                     disabled={form.status === 'COMPLETED'}
                                  >
                                     {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                  </select>
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'right' }}>
-                                 <input type="number" step="0.01" className="input-field" style={{ width: '80px', padding: '2px', textAlign: 'right', display: 'inline-block' }} value={it.unit_price} onChange={e => {
-                                    const val = Number(e.target.value);
-                                    const newItems = [...form.items];
-                                    newItems[idx].unit_price = val;
-                                    newItems[idx].tax_amount = newItems[idx].quantity * val * (newItems[idx].tax_rate || 0) / 100;
-                                    newItems[idx].total_price = newItems[idx].quantity * val * (1 + (newItems[idx].tax_rate || 0) / 100);
-                                    setForm({...form, items: newItems});
-                                 }} disabled={form.status === 'COMPLETED'} />
+                                 <input type="number" step="0.01" className="input-field" style={{ width: '80px', padding: '2px', textAlign: 'right', display: 'inline-block' }} value={it.unit_price} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {price: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
                                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '2px' }}>vergiler hariç</div>
                               </td>
                               {activeTab === 'IN' && (
                                  <td style={{ padding: '0.8rem', textAlign: 'right' }}>
                                     <input type="number" step="0.01" className="input-field" style={{ width: '80px', padding: '2px', textAlign: 'right' }} value={it.sale_price || 0} onChange={e => {
-                                       const val = Number(e.target.value);
                                        const newItems = [...form.items];
-                                       newItems[idx].sale_price = val;
+                                       newItems[idx].sale_price = Number(e.target.value);
                                        setForm({...form, items: newItems});
                                     }} disabled={form.status === 'COMPLETED'} />
                                  </td>
                               )}
                               <td style={{ padding: '0.8rem', textAlign: 'center' }}>
-                                 <input type="number" className="input-field" style={{ width: '50px', padding: '2px', textAlign: 'center' }} value={it.tax_rate} onChange={e => {
-                                    const val = Number(e.target.value);
-                                    const newItems = [...form.items];
-                                    newItems[idx].tax_rate = val;
-                                    newItems[idx].tax_amount = newItems[idx].quantity * newItems[idx].unit_price * val / 100;
-                                    newItems[idx].total_price = newItems[idx].quantity * newItems[idx].unit_price * (1 + val / 100);
-                                    setForm({...form, items: newItems});
-                                 }} disabled={form.status === 'COMPLETED'} />
+                                 <input type="number" className="input-field" style={{ width: '50px', padding: '2px', textAlign: 'center' }} value={it.tax_rate} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {tax: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'right', color: 'var(--warning-color)', fontWeight: '600' }}>
-                                 ₺{taxLine.toLocaleString('tr-TR', {minimumFractionDigits: 2})}
+                                 ₺{(it.tax_amount || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2})}
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'right', fontWeight: '700' }}>
-                                 <div>₺{totalLine.toLocaleString('tr-TR', {minimumFractionDigits: 2})}</div>
+                                 <div>₺{(it.total_price || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2})}</div>
                                  <small style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>vergiler dahil</small>
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'center' }}>
@@ -992,7 +1035,25 @@ export default function StockDocuments() {
                      </div>
                   ) : (
                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {form.items.map((it, idx) => (
+                        {form.items.map((it, idx) => {
+                           const updateItemValues = (items, index, {qty, price, tax, unit}) => {
+                               const newItems = [...items];
+                               const item = newItems[index];
+                               if (qty !== undefined) item.quantity = qty;
+                               if (price !== undefined) item.unit_price = price;
+                               if (tax !== undefined) item.tax_rate = tax;
+                               if (unit !== undefined) item.unit = unit;
+                               if (activeTab === 'OUT') {
+                                   item.total_price = Number(item.quantity) * Number(item.unit_price);
+                                   item.tax_amount = item.total_price - (item.total_price / (1 + (Number(item.tax_rate) || 0) / 100));
+                               } else {
+                                   const net = Number(item.quantity) * Number(item.unit_price);
+                                   item.tax_amount = net * (Number(item.tax_rate) || 0) / 100;
+                                   item.total_price = net + item.tax_amount;
+                               }
+                               return newItems;
+                           };
+                           return (
                            <div key={idx} style={{ background: 'var(--surface-color)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)', position: 'relative' }}>
                               <button 
                                  style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', color: 'var(--danger-color)', border: 'none', background: 'none', cursor: 'pointer' }}
@@ -1008,41 +1069,23 @@ export default function StockDocuments() {
                                  <div className="input-group">
                                     <label>Miktar</label>
                                     <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                       <input type="number" className="input-field" value={it.quantity} onChange={e => {
-                                          const val = Number(e.target.value);
-                                          const newItems = [...form.items];
-                                          newItems[idx].quantity = val;
-                                          newItems[idx].tax_amount = val * newItems[idx].unit_price * (newItems[idx].tax_rate || 0) / 100;
-                                          newItems[idx].total_price = val * newItems[idx].unit_price * (1 + (newItems[idx].tax_rate || 0) / 100);
-                                          setForm({...form, items: newItems});
-                                       }} disabled={form.status === 'COMPLETED'} />
-                                       <select className="input-field" style={{ width: '80px' }} value={it.unit} onChange={e => {
-                                          const newItems = [...form.items];
-                                          newItems[idx].unit = e.target.value;
-                                          setForm({...form, items: newItems});
-                                       }} disabled={form.status === 'COMPLETED'}>
+                                       <input type="number" className="input-field" value={it.quantity} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {qty: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
+                                       <select className="input-field" style={{ width: '80px' }} value={it.unit} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {unit: e.target.value})})} disabled={form.status === 'COMPLETED'}>
                                           {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                        </select>
                                     </div>
                                  </div>
                                  <div className="input-group">
                                     <label>Birim Fiyat</label>
-                                    <input type="number" step="0.01" className="input-field" value={it.unit_price} onChange={e => {
-                                       const val = Number(e.target.value);
-                                       const newItems = [...form.items];
-                                       newItems[idx].unit_price = val;
-                                       newItems[idx].tax_amount = newItems[idx].quantity * val * (newItems[idx].tax_rate || 0) / 100;
-                                       newItems[idx].total_price = newItems[idx].quantity * val * (1 + (newItems[idx].tax_rate || 0) / 100);
-                                       setForm({...form, items: newItems});
-                                    }} disabled={form.status === 'COMPLETED'} />
+                                    <input type="number" step="0.01" className="input-field" value={it.unit_price} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {price: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
                                  </div>
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-color)', padding: '0.75rem', borderRadius: '8px' }}>
-                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>KDV (%{it.tax_rate}): ₺{ (Number(it.unit_price) * Number(it.quantity) * (Number(it.tax_rate) || 0) / 100).toLocaleString('tr-TR', {minimumFractionDigits: 2}) }</div>
-                                 <div style={{ fontWeight: '700', color: 'var(--primary-color)' }}>₺{ (Number(it.unit_price) * Number(it.quantity) * (1 + (Number(it.tax_rate) || 0) / 100)).toLocaleString('tr-TR', {minimumFractionDigits: 2}) }</div>
+                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>KDV (%{it.tax_rate || 0}): ₺{ (it.tax_amount || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2}) }</div>
+                                 <div style={{ fontWeight: '700', color: 'var(--primary-color)' }}>₺{ (it.total_price || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2}) }</div>
                               </div>
                            </div>
-                        ))}
+                        )})}
                      </div>
                   )}
                </div>

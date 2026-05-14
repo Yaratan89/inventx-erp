@@ -220,7 +220,7 @@ export default function Sales() {
         <body>
           <div class="header">
             <div class="company-info">
-              <h1>${settings.name || 'INVENTX ERP'}</h1>
+              <img src="${window.location.origin}/lundberg-logo.png" alt="${settings.name || 'LUNDBERG FARM GIDA'}" style="height: 80px; max-width: 250px; object-fit: contain; margin-bottom: 8px;" />
               <div class="company-details">
                 ${settings.address ? `<p style="margin:0">${settings.address}</p>` : ''}
                 <p style="margin:4px 0 0 0">

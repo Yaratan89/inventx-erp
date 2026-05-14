@@ -181,7 +181,7 @@ export default function Products() {
     if (invError) { alert("Hata: " + invError.message); setLoading(false); return; }
 
     if (formData.party_id && totalQty > 0) {
-       const debtAmount = (targetProduct.cost_price || 0) * totalQty;
+       const debtAmount = formData.cost_price * totalQty;
        await supabase.from('financial_transactions').insert([{
           party_id: formData.party_id,
           amount: debtAmount,
@@ -358,7 +358,7 @@ export default function Products() {
                             <button className="btn btn-secondary p-1" title="Transfer" onClick={() => { setTransferData({ product: prd, from_loc: locations[0]?.id, to_loc: locations[1]?.id, qty: 1, courier: '', tracking: '' }); setIsTransferModalOpen(true); }}><ArrowRightLeft size={16} /></button>
                             <button className="btn btn-primary p-1" title="Hızlı Stok Girişi" onClick={() => { 
                                 setTargetProduct(prd); 
-                                setFormData({ ...INITIAL_FORM_STATE, location_id: locations[0]?.id || '' }); 
+                                setFormData({ ...INITIAL_FORM_STATE, location_id: locations[0]?.id || '', cost_price: prd.cost_price || 0 }); 
                                 setIsStockModalOpen(true); 
                             }}><Plus size={16} /></button>
                             {isAdmin && (
@@ -473,6 +473,10 @@ export default function Products() {
                         <option value="">Cari Borçlandırma</option>
                         {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                      </select>
+                  </div>
+                  <div className="input-group">
+                     <label>Birim Alış Maliyeti (₺)</label>
+                     <input type="number" step="0.01" className="input-field" value={formData.cost_price} onChange={e => setFormData({...formData, cost_price: parseFloat(e.target.value) || 0})} />
                   </div>
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                      <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setIsStockModalOpen(false)}>İptal</button>
