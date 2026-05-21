@@ -3,7 +3,7 @@ import { Plus, Warehouse, Store, MapPin, Trash2, X, Phone, Globe, Package, Clock
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { differenceInDays, format } from 'date-fns';
-
+import * as XLSX from 'xlsx';
 export default function Locations() {
   const { isAdmin } = useAuth();
   const [locations, setLocations] = useState([]);
@@ -80,6 +80,31 @@ export default function Locations() {
       setLocInventory(data);
     }
     setDetailLoading(false);
+  };
+
+  const handleExportExcel = () => {
+    if (!locInventory || locInventory.length === 0) return;
+    
+    const dataToExport = locInventory.map(item => ({
+      'Ürün Adı': item.products?.name || '',
+      'Barkod/SKU': item.products?.sku || item.products?.barcode || '',
+      'Kategori': item.products?.category || '',
+      'Miktar': item.quantity,
+      'Birim Maliyet': item.products?.cost_price || 0,
+      'Satış Fiyatı': item.products?.price || 0,
+      'Toplam Maliyet Değeri': item.quantity * (item.products?.cost_price || 0),
+      'Depoda Bekleme (Gün)': item.products?.created_at ? differenceInDays(new Date(), new Date(item.products.created_at)) : 0
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Envanter');
+    
+    worksheet['!cols'] = [
+      {wch: 40}, {wch: 20}, {wch: 20}, {wch: 10}, {wch: 15}, {wch: 15}, {wch: 20}, {wch: 20}
+    ];
+
+    XLSX.writeFile(workbook, `${selectedLoc?.name || 'Depo'}_Envanteri.xlsx`);
   };
 
   return (
@@ -195,6 +220,9 @@ export default function Locations() {
                    value={detailSearch}
                    onChange={e => setDetailSearch(e.target.value)}
                 />
+                <button className="btn btn-primary" onClick={handleExportExcel} disabled={detailLoading || locInventory.length === 0} style={{ padding: '0.6rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                   <ExternalLink size={16} /> Excel İndir
+                </button>
              </div>
 
              <div style={{ overflowY: 'auto', flex: 1, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>

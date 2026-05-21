@@ -980,7 +980,7 @@ export default function StockDocuments() {
                                  </select>
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'right' }}>
-                                 <input type="number" step="0.01" className="input-field" style={{ width: '80px', padding: '2px', textAlign: 'right', display: 'inline-block' }} value={it.unit_price} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {price: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
+                                 <input type="number" step="0.01" className="input-field" style={{ width: '80px', padding: '2px', textAlign: 'right', display: 'inline-block' }} value={it.unit_price} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {price: Number(e.target.value)})})} />
                                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '2px' }}>vergiler hariç</div>
                               </td>
                               {activeTab === 'IN' && (
@@ -989,17 +989,17 @@ export default function StockDocuments() {
                                        const newItems = [...form.items];
                                        newItems[idx].sale_price = Number(e.target.value);
                                        setForm({...form, items: newItems});
-                                    }} disabled={form.status === 'COMPLETED'} />
+                                    }} />
                                  </td>
                               )}
                               <td style={{ padding: '0.8rem', textAlign: 'center' }}>
-                                 <input type="number" className="input-field" style={{ width: '50px', padding: '2px', textAlign: 'center' }} value={it.tax_rate} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {tax: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
+                                 <input type="number" className="input-field" style={{ width: '50px', padding: '2px', textAlign: 'center' }} value={it.tax_rate} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {tax: Number(e.target.value)})})} />
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'right', color: 'var(--warning-color)', fontWeight: '600' }}>
                                  ₺{(it.tax_amount || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2})}
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'right', fontWeight: '700' }}>
-                                 <input type="number" step="0.01" className="input-field" style={{ width: '90px', padding: '2px', textAlign: 'right', display: 'inline-block', fontWeight: '700', color: 'var(--primary-color)' }} value={it.total_price || 0} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {total: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
+                                 <input type="number" step="0.01" className="input-field" style={{ width: '90px', padding: '2px', textAlign: 'right', display: 'inline-block', fontWeight: '700', color: 'var(--primary-color)' }} value={it.total_price || 0} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {total: Number(e.target.value)})})} />
                                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '2px' }}>vergiler dahil</div>
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'center' }}>
@@ -1075,12 +1075,12 @@ export default function StockDocuments() {
                                  </div>
                                  <div className="input-group">
                                     <label>Birim Fiyat</label>
-                                    <input type="number" step="0.01" className="input-field" value={it.unit_price} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {price: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
+                                    <input type="number" step="0.01" className="input-field" value={it.unit_price} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {price: Number(e.target.value)})})} />
                                  </div>
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-color)', padding: '0.75rem', borderRadius: '8px' }}>
                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>KDV (%{it.tax_rate || 0}): ₺{ (it.tax_amount || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2}) }</div>
-                                 <div><input type="number" step="0.01" className="input-field" style={{ width: '90px', padding: '2px', textAlign: 'right', fontWeight: '700', color: 'var(--primary-color)' }} value={it.total_price || 0} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {total: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} /></div>
+                                 <div><input type="number" step="0.01" className="input-field" style={{ width: '90px', padding: '2px', textAlign: 'right', fontWeight: '700', color: 'var(--primary-color)' }} value={it.total_price || 0} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {total: Number(e.target.value)})})} /></div>
                               </div>
                            </div>
                         )})}
