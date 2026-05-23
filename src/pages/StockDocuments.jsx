@@ -250,7 +250,9 @@ export default function StockDocuments() {
     setSelectedProduct(pid);
     const prd = products.find(p => p.id === pid);
     if (prd) {
-      setItemPrice(activeTab === 'IN' ? (prd.cost_price || 0) : (prd.price || 0));
+      const pPrice = activeTab === 'IN' ? (prd.cost_price || 0) : (prd.price || 0);
+      const kdvDahilPrice = pPrice * (1 + ((prd.tax_rate || 20) / 100)); // Show KDV Dahil to user
+      setItemPrice(kdvDahilPrice);
       setItemSalePrice(prd.price || 0);
       setItemQty(1);
       setItemUnit(prd.unit || 'Adet');
@@ -271,17 +273,21 @@ export default function StockDocuments() {
       newItems[existingIndex].tax_amount = newQty * uPrice * tRate / 100;
       newItems[existingIndex].total_price = newQty * uPrice * (1 + tRate / 100);
     } else {
+      const taxRate = prd.tax_rate || 20;
+      const totalPrc = Number(itemQty) * Number(itemPrice); // itemPrice is KDV Dahil
+      const unitPrc = totalPrc / (1 + (taxRate / 100)) / Number(itemQty);
+      
       newItems.push({
         product_id: prd.id,
         product_name: prd.name,
         barcode: prd.barcode || prd.sku,
         quantity: Number(itemQty),
-        unit_price: Number(itemPrice),
-        sale_price: activeTab === 'IN' ? Number(itemSalePrice) : Number(itemPrice),
-        tax_rate: prd.tax_rate || 20,
+        unit_price: unitPrc,
+        sale_price: activeTab === 'IN' ? Number(itemSalePrice) : unitPrc,
+        tax_rate: taxRate,
         unit: itemUnit || prd.unit || 'Adet',
-        tax_amount: Number(itemQty) * Number(itemPrice) * (prd.tax_rate || 20) / 100,
-        total_price: Number(itemQty) * Number(itemPrice) * (1 + (prd.tax_rate || 20) / 100)
+        tax_amount: totalPrc - (unitPrc * Number(itemQty)),
+        total_price: totalPrc
       });
     }
     
@@ -904,16 +910,16 @@ export default function StockDocuments() {
                         </select>
                      </div>
                      <div style={{ display: 'flex', gap: '0.5rem', flex: 3 }} className="mobile-stack">
-                        <div className="input-group" style={{ flex: 1 }}><label>Miktar</label><input type="number" className="input-field" value={itemQty} onChange={e => setItemQty(e.target.value)} /></div>
+                        <div className="input-group" style={{ flex: 1 }}><label>Miktar</label><input type="number" step="any" className="input-field" value={itemQty} onChange={e => setItemQty(e.target.value)} /></div>
                         <div className="input-group" style={{ flex: 1.2 }}>
                            <label>Birim</label>
                            <select className="input-field" value={itemUnit} onChange={e => setItemUnit(e.target.value)}>
                               {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                            </select>
                         </div>
-                        <div className="input-group" style={{ flex: 1 }}><label>{activeTab === 'IN' ? 'Alış Fiyatı' : 'Fiyat'}</label><input type="number" className="input-field" value={itemPrice} onChange={e => setItemPrice(e.target.value)} /></div>
+                        <div className="input-group" style={{ flex: 1 }}><label>{activeTab === 'IN' ? 'Alış Fiyatı (KDV Dahil)' : 'Fiyat (KDV Dahil)'}</label><input type="number" step="any" className="input-field" value={itemPrice} onChange={e => setItemPrice(e.target.value)} /></div>
                         {activeTab === 'IN' && (
-                           <div className="input-group" style={{ flex: 1 }}><label>Satış Fiyatı</label><input type="number" className="input-field" value={itemSalePrice} onChange={e => setItemSalePrice(e.target.value)} /></div>
+                           <div className="input-group" style={{ flex: 1 }}><label>Satış Fiyatı</label><input type="number" step="any" className="input-field" value={itemSalePrice} onChange={e => setItemSalePrice(e.target.value)} /></div>
                         )}
                         <button className="btn btn-primary mobile-full-width" style={{ height: '42px', alignSelf: 'flex-end' }} onClick={addItemToCart}>Ekle</button>
                      </div>
@@ -968,13 +974,12 @@ export default function StockDocuments() {
                                  <small style={{ color: 'var(--text-muted)' }}>{it.barcode}</small>
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'center' }}>
-                                 <input type="number" className="input-field" style={{ width: '55px', padding: '2px', textAlign: 'center' }} value={it.quantity} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {qty: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
+                                 <input type="number" step="any" className="input-field" style={{ width: '55px', padding: '2px', textAlign: 'center' }} value={it.quantity} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {qty: Number(e.target.value)})})} />
                                  <select 
                                     className="input-field" 
                                     style={{ width: '65px', padding: '2px', fontSize: '0.7rem', marginLeft: '4px' }}
                                     value={it.unit}
                                     onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {unit: e.target.value})})}
-                                    disabled={form.status === 'COMPLETED'}
                                  >
                                     {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                  </select>
@@ -1003,7 +1008,7 @@ export default function StockDocuments() {
                                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '2px' }}>vergiler dahil</div>
                               </td>
                               <td style={{ padding: '0.8rem', textAlign: 'center' }}>
-                                 <button style={{ color: 'var(--danger-color)', border: 'none', background: 'none', cursor: 'pointer', opacity: form.status === 'COMPLETED' ? 0.5 : 1 }} onClick={() => removeItemFromCart(idx)} disabled={form.status === 'COMPLETED'}><Trash2 size={16} /></button>
+                                 <button style={{ color: 'var(--danger-color)', border: 'none', background: 'none', cursor: 'pointer' }} onClick={() => removeItemFromCart(idx)}><Trash2 size={16} /></button>
                               </td>
                            </tr>
                         )})}
@@ -1056,7 +1061,6 @@ export default function StockDocuments() {
                               <button 
                                  style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', color: 'var(--danger-color)', border: 'none', background: 'none', cursor: 'pointer' }}
                                  onClick={() => removeItemFromCart(idx)}
-                                 disabled={form.status === 'COMPLETED'}
                               >
                                  <Trash2 size={18} />
                               </button>
@@ -1067,8 +1071,8 @@ export default function StockDocuments() {
                                  <div className="input-group">
                                     <label>Miktar</label>
                                     <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                       <input type="number" className="input-field" value={it.quantity} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {qty: Number(e.target.value)})})} disabled={form.status === 'COMPLETED'} />
-                                       <select className="input-field" style={{ width: '80px' }} value={it.unit} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {unit: e.target.value})})} disabled={form.status === 'COMPLETED'}>
+                                       <input type="number" step="any" className="input-field" value={it.quantity} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {qty: Number(e.target.value)})})} />
+                                       <select className="input-field" style={{ width: '80px' }} value={it.unit} onChange={e => setForm({...form, items: updateItemValues(form.items, idx, {unit: e.target.value})})}>
                                           {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                        </select>
                                     </div>
