@@ -178,7 +178,10 @@ export default function StockDocuments() {
       return;
     }
 
-    const price = activeTab === 'IN' ? (prd.cost_price || 0) : (prd.price || 0);
+    const basePrice = activeTab === 'IN' ? (prd.cost_price || 0) : (prd.price || 0);
+    const prdTaxRate = prd.tax_rate || 20;
+    const kdvDahilPrice = activeTab === 'IN' ? basePrice * (1 + (prdTaxRate / 100)) : basePrice;
+
     setForm(prev => {
       const existingIndex = prev.items.findIndex(i => i.product_id === prd.id);
       const newItems = [...prev.items];
@@ -190,18 +193,26 @@ export default function StockDocuments() {
           product_name: prd.name,
           barcode: prd.barcode || prd.sku,
           quantity: 1,
-          unit_price: price,
-          tax_rate: prd.tax_rate || 20,
+          unit_price: 0,
+          tax_rate: prdTaxRate,
           unit: prd.unit || 'Adet',
-          sale_price: prd.price || 0
+          sale_price: activeTab === 'IN' ? (prd.price || 0) : 0
         });
       }
       
-      // Update tax and totals for the modified or new item
       const idxToUpdate = existingIndex >= 0 ? existingIndex : newItems.length - 1;
       const it = newItems[idxToUpdate];
-      it.tax_amount = it.quantity * it.unit_price * (it.tax_rate || 0) / 100;
-      it.total_price = it.quantity * it.unit_price + it.tax_amount;
+      const taxRate = it.tax_rate || 20;
+      
+      const totalPrc = Number(it.quantity) * Number(kdvDahilPrice);
+      const unitPrc = totalPrc / (1 + (taxRate / 100)) / Number(it.quantity);
+      
+      it.unit_price = unitPrc;
+      it.tax_amount = totalPrc - (unitPrc * Number(it.quantity));
+      it.total_price = totalPrc;
+      if (activeTab !== 'IN') {
+        it.sale_price = unitPrc;
+      }
 
       return { ...prev, items: newItems };
     });
@@ -222,25 +233,33 @@ export default function StockDocuments() {
       }]).select().single();
 
       if (error) { alert('Hata: ' + error.message); return; }
-
       setProducts(prev => [...prev, newPrd]);
-      const unitPrice = activeTab === 'IN' ? Number(quickAddForm.cost_price) : Number(quickAddForm.price);
+      
+      const taxRate = Number(newPrd.tax_rate) || 20;
+      const basePrice = activeTab === 'IN' ? Number(quickAddForm.cost_price) : Number(quickAddForm.price);
+      const kdvDahilPrice = activeTab === 'IN' ? basePrice * (1 + (taxRate / 100)) : basePrice;
+      const qty = Number(quickAddForm.quantity) || 1;
+      
+      const totalPrc = qty * kdvDahilPrice;
+      const unitPrc = totalPrc / (1 + (taxRate / 100)) / qty;
+
       setForm(prev => ({
         ...prev,
         items: [...prev.items, {
           product_id: newPrd.id,
           product_name: newPrd.name,
           barcode: newPrd.barcode || newPrd.sku,
-          quantity: Number(quickAddForm.quantity),
-          unit_price: unitPrice,
-          tax_rate: Number(quickAddForm.tax_rate) || 20,
-          unit: newPrd.unit,
-          tax_amount: Number(quickAddForm.quantity) * unitPrice * (Number(quickAddForm.tax_rate) || 20) / 100,
-          total_price: Number(quickAddForm.quantity) * unitPrice * (1 + (Number(quickAddForm.tax_rate) || 20) / 100)
+          quantity: qty,
+          unit_price: unitPrc,
+          tax_rate: taxRate,
+          unit: newPrd.unit || 'Adet',
+          sale_price: activeTab === 'IN' ? Number(quickAddForm.price) : unitPrc,
+          tax_amount: totalPrc - (unitPrc * qty),
+          total_price: totalPrc
         }]
       }));
-
       setShowQuickAdd(false);
+      setQuickAddForm({ name: '', barcode: '', sku: '', category: '', cost_price: 0, price: 0, quantity: 1 });
     } catch (err) {
       alert('Hata: ' + err.message);
     }
@@ -425,7 +444,7 @@ export default function StockDocuments() {
             if (it.sale_price) updatePayload.price = Number(it.sale_price);
             updatePayload.tax_rate = Number(it.tax_rate);
           } else {
-            updatePayload.price = Number(it.unit_price);
+            updatePayload.price = Number(it.total_price) / (Number(it.quantity) || 1);
             updatePayload.tax_rate = Number(it.tax_rate);
           }
           const { error: prdErr } = await supabase.from('products').update(updatePayload).eq('id', it.product_id);
