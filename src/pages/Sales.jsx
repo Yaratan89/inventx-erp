@@ -494,7 +494,7 @@ export default function Sales() {
                    </div>
                    <div style={{ flex: 1 }} className="input-group">
                       <label>Miktar</label>
-                      <input type="number" className="input-field" value={saleData.qty} onChange={e => setSaleData({...saleData, qty: parseInt(e.target.value) || 1})} min="1" required />
+                      <input type="number" step="any" className="input-field" value={saleData.qty} onChange={e => setSaleData({...saleData, qty: parseFloat(e.target.value) || 1})} min="0.01" required />
                    </div>
                 </div>
 
