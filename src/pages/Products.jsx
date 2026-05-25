@@ -3,8 +3,8 @@ import { Plus, Search, Filter, Edit, Trash2, Camera, Download, Upload, X, FileSp
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Html5Qrcode } from 'html5-qrcode';
-import { differenceInDays } from 'date-fns';
 import JsBarcode from 'jsbarcode';
+import * as XLSX from 'xlsx';
 
 const UNITS = ['Adet', 'KG', 'Çuval', 'Paket', 'Koli', 'Litre', 'Metre', 'Gram', 'Ton', 'Palet', 'Bağ', 'Demet', 'Kutu', 'Teneke'];
 const UNIQUE_UNITS = [...new Set(UNITS)];
@@ -41,6 +41,7 @@ export default function Products() {
 
   const barcodeRef = useRef(null);
   const scannerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const handlePriceChange = (val) => {
     const priceVal = parseFloat(val) || 0;
@@ -75,6 +76,109 @@ export default function Products() {
     }));
   };
 
+  const handleImportExcel = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const data = evt.target.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const parsedData = XLSX.utils.sheet_to_json(sheet);
+        
+        if (parsedData.length === 0) {
+          alert("Excel dosyası boş veya okunamadı.");
+          return;
+        }
+
+        const productsToInsert = parsedData.map(row => {
+          const name = row.Name || row.UrunAdi || row['Ürün Adı'] || row.name || '';
+          const sku = row.SKU || row.Sku || row.sku || '';
+          const barcode = row.Barcode || row.Barkod || row.barcode || '';
+          const category = row.Category || row.Kategori || row.category || 'Genel';
+          const price = parseFloat(row.Price || row.Fiyat || row.SatisFiyati || row['Satış Fiyatı'] || row.price) || 0;
+          const cost_price = parseFloat(row.CostPrice || row.AlisFiyati || row['Alış Fiyatı'] || row.cost_price) || 0;
+          const tax_rate = parseInt(row.TaxRate || row.KDV || row['KDV Oranı'] || row.tax_rate) || 20;
+          const unit = row.Unit || row.Birim || row.unit || 'Adet';
+          
+          return { name, sku, barcode, category, price, cost_price, tax_rate, unit };
+        }).filter(p => p.name !== '');
+
+        if (productsToInsert.length === 0) {
+          alert("Geçerli ürün bulunamadı. Lütfen kolon isimlerini kontrol edin (UrunAdi/Name, SKU, Barkod/Barcode).");
+          return;
+        }
+
+        setLoading(true);
+        let successCount = 0;
+        let errorCount = 0;
+        for (const item of productsToInsert) {
+          let existing = null;
+          if (item.sku) {
+            const { data: res } = await supabase.from('products').select('id').eq('sku', item.sku).maybeSingle();
+            existing = res;
+          } else if (item.barcode) {
+            const { data: res } = await supabase.from('products').select('id').eq('barcode', item.barcode).maybeSingle();
+            existing = res;
+          }
+          
+          if (existing) {
+            const { error } = await supabase.from('products').update(item).eq('id', existing.id);
+            if (error) {
+              console.error("Update error for product", item.name, error);
+              errorCount++;
+            } else {
+              successCount++;
+            }
+          } else {
+            const { error } = await supabase.from('products').insert([item]);
+            if (error) {
+              console.error("Insert error for product", item.name, error);
+              errorCount++;
+            } else {
+              successCount++;
+            }
+          }
+        }
+        alert(`${successCount} ürün başarıyla eklendi/güncellendi, ${errorCount} ürün hata aldı.`);
+        await fetchInitialData();
+      } catch (err) {
+        console.error(err);
+        alert("Dosya okuma hatası: " + err.message);
+      } finally {
+        setLoading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleExportExcel = () => {
+    const dataToExport = products.map(prd => {
+      const taxRate = prd.tax_rate !== undefined && prd.tax_rate !== null ? prd.tax_rate : 20;
+      const priceWithTax = (prd.price || 0) * (1 + taxRate / 100);
+      return {
+        'Ürün Adı': prd.name,
+        'SKU': prd.sku,
+        'Barkod': prd.barcode || '',
+        'Kategori': prd.category || '',
+        'Birim': prd.unit || 'Adet',
+        'Alış Fiyatı (₺)': prd.cost_price || 0,
+        'Satış Fiyatı (KDV Hariç) (₺)': prd.price || 0,
+        'KDV (%)': taxRate,
+        'Satış Fiyatı (KDV Dahil) (₺)': parseFloat(priceWithTax.toFixed(2))
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Ürünler');
+    XLSX.writeFile(workbook, 'Ürün_Listesi.xlsx');
+  };
+
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -83,7 +187,7 @@ export default function Products() {
     setLoading(true);
     try {
       const { data: locs } = await supabase.from('locations').select('*').order('name');
-      const { data: prds } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+      const { data: prds } = await supabase.from('products').select('*').order('name');
       const { data: inv } = await supabase.from('inventory').select('*');
       const { data: pts } = await supabase.from('parties').select('*').eq('type', 'Supplier').order('name');
       const { data: crs } = await supabase.from('couriers').select('*').order('name');
@@ -308,9 +412,52 @@ export default function Products() {
     setLoading(false);
   };
 
-  const updateProductPrice = async (id, field, value) => {
-    const numValue = parseFloat(value) || 0;
+  const handleRowValueChange = (id, field, val) => {
+    setProducts(prev => prev.map(prd => {
+      if (prd.id === id) {
+        if (field === 'tax_rate') {
+          return { ...prd, [field]: parseInt(val) || 0 };
+        } else {
+          return { ...prd, [field]: parseFloat(val) || 0 };
+        }
+      }
+      return prd;
+    }));
+  };
+
+  const handleRowValueBlur = async (id, field, val) => {
+    let numValue;
+    if (field === 'tax_rate') {
+      numValue = parseInt(val) || 0;
+    } else {
+      numValue = parseFloat(val) || 0;
+    }
     const { error } = await supabase.from('products').update({ [field]: numValue }).eq('id', id);
+    if (error) { alert('Hata: ' + error.message); return; }
+    const { data: prds } = await supabase.from('products').select('*').order('name');
+    if (prds) setProducts(prds);
+  };
+
+  const handleRowPriceWithTaxChange = (id, val) => {
+    const priceWithTaxVal = parseFloat(val) || 0;
+    setProducts(prev => prev.map(prd => {
+      if (prd.id === id) {
+        const taxRate = prd.tax_rate !== undefined && prd.tax_rate !== null ? prd.tax_rate : 20;
+        const netPrice = priceWithTaxVal / (1 + taxRate / 100);
+        return { ...prd, price: parseFloat(netPrice.toFixed(4)) };
+      }
+      return prd;
+    }));
+  };
+
+  const handleRowPriceWithTaxBlur = async (id, val) => {
+    const priceWithTaxVal = parseFloat(val) || 0;
+    const prd = products.find(p => p.id === id);
+    if (!prd) return;
+    const taxRate = prd.tax_rate !== undefined && prd.tax_rate !== null ? prd.tax_rate : 20;
+    const netPrice = priceWithTaxVal / (1 + taxRate / 100);
+    const numValue = parseFloat(netPrice.toFixed(4));
+    const { error } = await supabase.from('products').update({ price: numValue }).eq('id', id);
     if (error) { alert('Hata: ' + error.message); return; }
     const { data: prds } = await supabase.from('products').select('*').order('name');
     if (prds) setProducts(prds);
@@ -363,12 +510,25 @@ export default function Products() {
           <p style={{ color: 'var(--text-muted)' }}>Depo bazlı stok takibi ve maliyet kontrol paneli.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button className="btn btn-primary" onClick={() => setShowScanner(true)}><Camera size={18} /> Tarat</button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImportExcel} 
+            accept=".xlsx, .xls, .csv" 
+            style={{ display: 'none' }} 
+          />
+          <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+             <Upload size={18} /> İçe Aktar
+          </button>
+          <button className="btn btn-secondary" onClick={handleExportExcel} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+             <Download size={18} /> Dışa Aktar
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowScanner(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Camera size={18} /> Tarat</button>
           {isAdmin && (
             <button className="btn btn-primary" onClick={() => { 
                 setFormData({ ...INITIAL_FORM_STATE, location_id: locations[0]?.id || '' }); 
                 setIsAddModalOpen(true); 
-            }}>
+            }} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <Plus size={18} /> Yeni Ürün
             </button>
           )}
@@ -446,18 +606,20 @@ export default function Products() {
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                       <div style={{display:'inline-flex', alignItems:'center'}}>
                         <span style={{color:'var(--text-muted)', marginRight:'2px'}}>₺</span>
-                        <input type="number" step="0.01" style={{width: '65px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'right', fontSize:'0.85rem', background:'transparent', color:'var(--text-main)'}} 
-                          defaultValue={prd.cost_price || 0}
-                          onBlur={(e) => updateProductPrice(prd.id, 'cost_price', e.target.value)}
+                        <input type="number" step="0.01" style={{width: '75px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'right', fontSize:'0.85rem', background:'transparent', color:'var(--text-main)'}} 
+                          value={prd.cost_price !== undefined && prd.cost_price !== null ? prd.cost_price : ''}
+                          onChange={(e) => handleRowValueChange(prd.id, 'cost_price', e.target.value)}
+                          onBlur={(e) => handleRowValueBlur(prd.id, 'cost_price', e.target.value)}
                         />
                       </div>
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                       <div style={{display:'inline-flex', alignItems:'center'}}>
                         <span style={{color:'var(--text-muted)', marginRight:'2px'}}>₺</span>
-                        <input type="number" step="0.01" style={{width: '65px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'right', fontSize:'0.85rem', background:'transparent', color:'var(--text-main)'}} 
-                          defaultValue={prd.price || 0}
-                          onBlur={(e) => updateProductPrice(prd.id, 'price', e.target.value)}
+                        <input type="number" step="0.01" style={{width: '75px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'right', fontSize:'0.85rem', background:'transparent', color:'var(--text-main)'}} 
+                          value={prd.price !== undefined && prd.price !== null ? prd.price : ''}
+                          onChange={(e) => handleRowValueChange(prd.id, 'price', e.target.value)}
+                          onBlur={(e) => handleRowValueBlur(prd.id, 'price', e.target.value)}
                         />
                       </div>
                     </td>
@@ -465,13 +627,21 @@ export default function Products() {
                       <div style={{display:'inline-flex', alignItems:'center'}}>
                         <span style={{color:'var(--text-muted)', marginRight:'2px'}}>%</span>
                         <input type="number" style={{width: '45px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'center', fontSize:'0.85rem', background:'transparent', color:'var(--text-main)'}} 
-                          defaultValue={taxRate}
-                          onBlur={(e) => updateProductPrice(prd.id, 'tax_rate', e.target.value)}
+                          value={prd.tax_rate !== undefined && prd.tax_rate !== null ? prd.tax_rate : ''}
+                          onChange={(e) => handleRowValueChange(prd.id, 'tax_rate', e.target.value)}
+                          onBlur={(e) => handleRowValueBlur(prd.id, 'tax_rate', e.target.value)}
                         />
                       </div>
                     </td>
-                    <td style={{ padding: '1rem', textAlign: 'center', fontWeight: '600', color: 'var(--primary-color)' }}>
-                      ₺{priceWithTax.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                      <div style={{display:'inline-flex', alignItems:'center'}}>
+                        <span style={{color:'var(--text-muted)', marginRight:'2px'}}>₺</span>
+                        <input type="number" step="0.01" style={{width: '75px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'right', fontSize:'0.85rem', background:'transparent', color:'var(--primary-color)', fontWeight:'600'}} 
+                          value={parseFloat(priceWithTax.toFixed(2)) || 0}
+                          onChange={(e) => handleRowPriceWithTaxChange(prd.id, e.target.value)}
+                          onBlur={(e) => handleRowPriceWithTaxBlur(prd.id, e.target.value)}
+                        />
+                      </div>
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 'bold' }}>₺{totalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                     <td style={{ padding: '1rem', textAlign: 'right' }}>
