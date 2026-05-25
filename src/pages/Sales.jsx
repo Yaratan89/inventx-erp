@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { ShoppingCart, Search, User, Calendar, DollarSign, ArrowDownLeft, FileText, Trash2, X, Plus, Package, MapPin, CreditCard, Camera } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
 import BarcodeScanner from '../components/BarcodeScanner';
 
 export default function Sales() {
@@ -30,7 +29,25 @@ export default function Sales() {
   });
 
   const [showScanner, setShowScanner] = useState(false);
-  const scannerRef = useRef(null);
+
+  const [selectedPrd, setSelectedPrd] = useState(null);
+  const [priceWithTax, setPriceWithTax] = useState(0);
+
+  const handleSalePriceChange = (val) => {
+    const priceVal = parseFloat(val) || 0;
+    const taxRate = selectedPrd ? (selectedPrd.tax_rate !== undefined && selectedPrd.tax_rate !== null ? selectedPrd.tax_rate : 20) : 20;
+    const pWithTax = priceVal * (1 + taxRate / 100);
+    setSaleData(prev => ({ ...prev, price: priceVal }));
+    setPriceWithTax(parseFloat(pWithTax.toFixed(4)));
+  };
+
+  const handleSalePriceWithTaxChange = (val) => {
+    const priceWithTaxVal = parseFloat(val) || 0;
+    const taxRate = selectedPrd ? (selectedPrd.tax_rate !== undefined && selectedPrd.tax_rate !== null ? selectedPrd.tax_rate : 20) : 20;
+    const priceVal = priceWithTaxVal / (1 + taxRate / 100);
+    setSaleData(prev => ({ ...prev, price: parseFloat(priceVal.toFixed(4)) }));
+    setPriceWithTax(priceWithTaxVal);
+  };
 
   useEffect(() => {
     fetchInitialData();
@@ -115,13 +132,15 @@ export default function Sales() {
       if (invUpdErr) throw new Error("Stok düşülemedi: " + invUpdErr.message);
 
       // 2. Finansal Kayıt
-      const totalAmount = saleData.price * saleData.qty;
+      const taxRate = selectedProduct ? (selectedProduct.tax_rate !== undefined && selectedProduct.tax_rate !== null ? selectedProduct.tax_rate : 20) : 20;
+      const computedPriceWithTax = saleData.price * (1 + taxRate / 100);
+      const totalAmount = (priceWithTax || computedPriceWithTax) * saleData.qty;
       const { data: txData, error: txErr } = await supabase.from('financial_transactions').insert([{
         party_id: saleData.party_id,
         amount: totalAmount,
         type: saleData.method === 'Credit' ? 'Sale_Credit' : 'Collection',
         method: saleData.method === 'Credit' ? 'Cash' : saleData.method,
-        description: `${selectedProduct.name} - ${saleData.qty} Adet Satış${saleData.irsaliye_no ? ' | İrs:'+saleData.irsaliye_no : ''}${saleData.fatura_no ? ' | Fat:'+saleData.fatura_no : ''}`
+        description: `${selectedProduct.name} - ${saleData.qty} Adet Satış | KDV: %${taxRate}${saleData.irsaliye_no ? ' | İrs:'+saleData.irsaliye_no : ''}${saleData.fatura_no ? ' | Fat:'+saleData.fatura_no : ''}`
       }]).select().single();
 
       if (txErr) throw new Error("Finansal kayıt oluşturulamadı: " + txErr.message);
@@ -135,9 +154,7 @@ export default function Sales() {
       }]);
 
       alert("Satış başarıyla gerçekleştirildi. Fatura/Fiş oluşturuluyor...");
-      if (scannerRef.current) scannerRef.current.stop().catch(console.error);
-      setIsAddModalOpen(false);
-      setShowScanner(false);
+      closeAddModal();
       
       // Yazdırma İşlemini Otomatik Başlat
       const party = parties.find(p => p.id === saleData.party_id);
@@ -158,19 +175,56 @@ export default function Sales() {
     setShowScanner(true);
   };
 
+  const closeAddModal = () => {
+    setIsAddModalOpen(false);
+    setSelectedPrd(null);
+    setPriceWithTax(0);
+    setSaleData({
+      product_id: '',
+      party_id: '',
+      location_id: '',
+      qty: 1,
+      price: 0,
+      method: 'Cash',
+      irsaliye_no: '',
+      fatura_no: ''
+    });
+    setShowScanner(false);
+  };
+
   const handleBarcodeScan = (decodedText) => {
     const product = products.find(p => p.barcode === decodedText || p.sku === decodedText);
     if (product) {
+      setSelectedPrd(product);
+      const taxRate = product.tax_rate !== undefined && product.tax_rate !== null ? product.tax_rate : 20;
+      const computedWithTax = product.price * (1 + taxRate / 100);
       setSaleData(prev => ({ ...prev, product_id: product.id, price: product.price }));
+      setPriceWithTax(parseFloat(computedWithTax.toFixed(4)));
+      setIsAddModalOpen(true);
       setShowScanner(false);
+    } else {
+      alert("Okunan barkod ile eşleşen ürün bulunamadı: " + decodedText);
     }
-    // Ürün bulunamazsa taramaya devam et (kapat butonu ile çıkılır)
   };
 
   const handlePrint = (sale) => {
     const printWindow = window.open('', '_blank');
     const qrData = encodeURIComponent(`Fatura No: ${sale.id} | Tutar: ${sale.amount} TL | Tarih: ${format(new Date(sale.created_at || new Date()), 'dd.MM.yyyy')}`);
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrData}`;
+
+    // KDV oranını açıklamadan ayıkla
+    const kdvMatch = sale.description?.match(/KDV:\s*%(\d+)/i);
+    const taxRate = kdvMatch ? parseInt(kdvMatch[1]) : 20;
+
+    // Net ve KDV tutarlarını hesapla
+    const grandTotal = Number(sale.amount);
+    const netAmount = grandTotal / (1 + taxRate / 100);
+    const taxAmount = grandTotal - netAmount;
+
+    // Miktarı ayıkla
+    const qtyMatch = sale.description?.match(/(\d+(?:\.\d+)?)\s*Adet/);
+    const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 1;
+    const unitPrice = netAmount / qty;
 
     printWindow.document.write(`
       <html>
@@ -240,7 +294,7 @@ export default function Sales() {
               </div>
             </div>
           </div>
-
+ 
           <div class="info-section">
             <div class="info-box">
               <h4>MÜŞTERİ (CARİ) BİLGİLERİ</h4>
@@ -257,34 +311,34 @@ export default function Sales() {
               <span class="sub-text">Yöntem: ${sale.method === 'Cash' ? 'Nakit' : sale.method === 'Bank' ? 'Havale/EFT' : 'Veresiye'}</span>
             </div>
           </div>
-
+ 
           <table>
             <thead>
               <tr>
                 <th>Ürün / İşlem Açıklaması</th>
                 <th style="text-align: center">Miktar</th>
-                <th style="text-align: right">Birim Fiyat</th>
-                <th style="text-align: right">Satır Toplamı</th>
+                <th style="text-align: right">Birim Fiyat (KDV Hariç)</th>
+                <th style="text-align: right">Satır Toplamı (KDV Dahil)</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>
-                  <strong style="color: #0f172a;">${sale.description || 'Satış İşlemi'}</strong>
+                  <strong style="color: #0f172a;">${(sale.description || 'Satış İşlemi').replace(/\|\s*KDV:\s*%[^\s|]+/i, '').replace(/\|\s*İrs(?:aliye)?:?\s*[^\s|]+/i, '').replace(/\|\s*Fat(?:ura)?:?\s*[^\s|]+/i, '').trim()}</strong>
                 </td>
                 <td style="text-align: center; font-weight: 500;">
-                  ${sale.description?.match(/(\d+)\s+Adet/)?.[1] || 1} Birim
+                  ${qty} Birim
                 </td>
                 <td style="text-align: right">
-                  ₺${(sale.amount / (parseInt(sale.description?.match(/(\d+)\s+Adet/)?.[1]) || 1)).toLocaleString(undefined, {minimumFractionDigits:2})}
+                  ₺${unitPrice.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
                 </td>
                 <td style="text-align: right; font-weight: 600; color: #0f172a;">
-                  ₺${Number(sale.amount).toLocaleString(undefined, {minimumFractionDigits:2})}
+                  ₺${grandTotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
                 </td>
               </tr>
             </tbody>
           </table>
-
+ 
           <div class="totals-container">
             <div>
               <div class="qr-code">
@@ -294,20 +348,20 @@ export default function Sales() {
             </div>
             <div class="totals-box">
               <div class="total-row">
-                <span>Ara Toplam</span>
-                <span style="font-weight: 600;">₺${Number(sale.amount).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                <span>Ara Toplam (KDV Hariç)</span>
+                <span style="font-weight: 600;">₺${netAmount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
               </div>
               <div class="total-row">
-                <span>KDV (%0 - Muaf)</span>
-                <span style="font-weight: 600;">₺0.00</span>
+                <span>KDV (%${taxRate})</span>
+                <span style="font-weight: 600;">₺${taxAmount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
               </div>
               <div class="total-row grand-total">
                 <span style="color: #0f172a;">GENEL TOPLAM</span>
-                <span>₺${Number(sale.amount).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                <span>₺${grandTotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
               </div>
             </div>
           </div>
-
+ 
           <div class="footer">
             <div>
               <strong>InventX Pro ERP</strong> tarafından dijital olarak oluşturulmuştur.
@@ -316,7 +370,7 @@ export default function Sales() {
               İmza / Kaşe
             </div>
           </div>
-
+ 
           <script>
             // Resimlerin yüklenmesini bekle ve yazdır
             window.onload = () => {
@@ -406,7 +460,7 @@ export default function Sales() {
                      </td>
                      <td style={{ padding: '1.25rem' }}>
                         <div style={{ fontSize: '0.9rem' }}>
-                           {(sale.description || 'Satış İşlemi').replace(/\|\s*İrs(?:aliye)?:?\s*[^\s|]+/i, '').replace(/\|\s*Fat(?:ura)?:?\s*[^\s|]+/i, '').trim()}
+                           {(sale.description || 'Satış İşlemi').replace(/\|\s*KDV:\s*%[^\s|]+/i, '').replace(/\|\s*İrs(?:aliye)?:?\s*[^\s|]+/i, '').replace(/\|\s*Fat(?:ura)?:?\s*[^\s|]+/i, '').trim()}
                         </div>
                      </td>
                      <td style={{ padding: '1.25rem' }}>
@@ -416,7 +470,7 @@ export default function Sales() {
                         </div>
                      </td>
                      <td style={{ padding: '1.25rem', textAlign: 'right', fontWeight: '800', fontSize: '1.1rem' }}>
-                        ${sale.amount.toLocaleString()}
+                        ₺{sale.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                      </td>
                      <td style={{ padding: '1.25rem', textAlign: 'center' }}>
                         <button className="btn btn-secondary" style={{ padding: '0.5rem', fontSize: '0.75rem' }} onClick={() => handlePrint(sale)}>
@@ -446,96 +500,119 @@ export default function Sales() {
                    <h3 style={{ fontWeight: '800', margin: 0, color: 'var(--primary-color)' }}>Yeni Stok Çıkışı / Satış</h3>
                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Ürün seçin ve satışı gerçekleştirin.</p>
                 </div>
-                <button className="btn btn-secondary" onClick={() => setIsAddModalOpen(false)}><X size={20}/></button>
+                <button className="btn btn-secondary" onClick={closeAddModal}><X size={20}/></button>
              </div>
              
-             <form onSubmit={handleNewSale} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                 <div className="input-group">
-                    <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-                       Ürün Seçimi
-                       <button type="button" onClick={startScanner} style={{ color: 'var(--primary-color)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <Camera size={14} /> Kamera ile Tara
-                       </button>
-                    </label>
-                    
-                    {showScanner && (
-                      <div id="sale-scanner" style={{ width: '100%', height: '200px', background: '#000', borderRadius: '8px', marginBottom: '1rem', overflow: 'hidden' }}></div>
-                    )}
+             {showScanner && (
+               <BarcodeScanner
+                  onScan={handleBarcodeScan}
+                  onClose={() => setShowScanner(false)}
+                  title="Satış İçin Barkod Tara"
+               />
+             )}
 
-                    <select 
-                       className="input-field high-visibility-select" 
-                       value={saleData.product_id} 
-                       onChange={e => {
-                          const prd = products.find(p => p.id === e.target.value);
-                          setSaleData({...saleData, product_id: e.target.value, price: prd?.price || 0});
-                       }}
-                       required
-                    >
-                       <option value="">Ürün Seçiniz...</option>
-                       {products.map(p => <option key={p.id} value={p.id}>{p.name} (Ref: {p.sku})</option>)}
+             <form onSubmit={handleNewSale} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <div className="input-group">
+                     <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        Ürün Seçimi
+                        <button type="button" onClick={startScanner} style={{ color: 'var(--primary-color)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                           <Camera size={14} /> Kamera ile Tara
+                        </button>
+                     </label>
+
+                     <select 
+                        className="input-field high-visibility-select" 
+                        value={saleData.product_id} 
+                        onChange={e => {
+                           const prd = products.find(p => p.id === e.target.value);
+                           setSelectedPrd(prd || null);
+                           const taxRate = prd ? (prd.tax_rate !== undefined && prd.tax_rate !== null ? prd.tax_rate : 20) : 20;
+                           const computedWithTax = prd ? prd.price * (1 + taxRate / 100) : 0;
+                           setSaleData({...saleData, product_id: e.target.value, price: prd?.price || 0});
+                           setPriceWithTax(parseFloat(computedWithTax.toFixed(4)));
+                        }}
+                        required
+                     >
+                        <option value="">Ürün Seçiniz...</option>
+                        {products.map(p => <option key={p.id} value={p.id}>{p.name} (Ref: {p.sku})</option>)}
+                     </select>
+                  </div>
+
+                 <div className="input-group">
+                    <label>Müşteri (Cari)</label>
+                    <select className="input-field high-visibility-select" value={saleData.party_id} onChange={e => setSaleData({...saleData, party_id: e.target.value})} required>
+                       <option value="">Müşteri Seçiniz...</option>
+                       {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                  </div>
 
-                <div className="input-group">
-                   <label>Müşteri (Cari)</label>
-                   <select className="input-field high-visibility-select" value={saleData.party_id} onChange={e => setSaleData({...saleData, party_id: e.target.value})} required>
-                      <option value="">Müşteri Seçiniz...</option>
-                      {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                   </select>
-                </div>
+                 <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ flex: 1 }} className="input-group">
+                       <label>Çıkış Deposu</label>
+                       <select className="input-field high-visibility-select" value={saleData.location_id} onChange={e => setSaleData({...saleData, location_id: e.target.value})} required>
+                          <option value="">Depo Seçin...</option>
+                          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                       </select>
+                    </div>
+                    <div style={{ flex: 1 }} className="input-group">
+                       <label>Miktar</label>
+                       <input type="number" step="any" className="input-field" value={saleData.qty} onChange={e => setSaleData({...saleData, qty: parseFloat(e.target.value) || 1})} min="0.01" required />
+                    </div>
+                 </div>
 
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                   <div style={{ flex: 1 }} className="input-group">
-                      <label>Çıkış Deposu</label>
-                      <select className="input-field high-visibility-select" value={saleData.location_id} onChange={e => setSaleData({...saleData, location_id: e.target.value})} required>
-                         <option value="">Depo Seçin...</option>
-                         {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                      </select>
-                   </div>
-                   <div style={{ flex: 1 }} className="input-group">
-                      <label>Miktar</label>
-                      <input type="number" step="any" className="input-field" value={saleData.qty} onChange={e => setSaleData({...saleData, qty: parseFloat(e.target.value) || 1})} min="0.01" required />
-                   </div>
-                </div>
+                 <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ flex: 1 }} className="input-group">
+                       <label>Satış Fiyatı (KDV Hariç) (₺)</label>
+                       <input type="number" step="0.0001" className="input-field" value={saleData.price} onChange={e => handleSalePriceChange(e.target.value)} required />
+                    </div>
+                    <div style={{ flex: 1 }} className="input-group">
+                       <label>Satış Fiyatı (KDV Dahil) (₺)</label>
+                       <input type="number" step="0.0001" className="input-field" value={priceWithTax} onChange={e => handleSalePriceWithTaxChange(e.target.value)} required />
+                    </div>
+                 </div>
 
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                   <div style={{ flex: 1 }} className="input-group">
-                      <label>Birim Satış Fiyatı (₺)</label>
-                      <input type="number" step="0.01" className="input-field" value={saleData.price} onChange={e => setSaleData({...saleData, price: parseFloat(e.target.value) || 0})} required />
-                   </div>
-                   <div style={{ flex: 1 }} className="input-group">
-                      <label>Ödeme Yöntemi</label>
-                      <select className="input-field" value={saleData.method} onChange={e => setSaleData({...saleData, method: e.target.value})}>
-                         <option value="Cash">Nakit</option>
-                         <option value="Bank">Banka / EFT</option>
-                         <option value="Credit">Veresiye (Açık Hesap)</option>
-                      </select>
-                   </div>
-                </div>
+                 <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ flex: 1 }} className="input-group">
+                       <label>Ödeme Yöntemi</label>
+                       <select className="input-field" value={saleData.method} onChange={e => setSaleData({...saleData, method: e.target.value})}>
+                          <option value="Cash">Nakit</option>
+                          <option value="Bank">Banka / EFT</option>
+                          <option value="Credit">Veresiye (Açık Hesap)</option>
+                       </select>
+                    </div>
+                    <div style={{ flex: 1 }} className="input-group">
+                       <label>Ürün KDV Oranı (%)</label>
+                       <div className="input-field" style={{ background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', paddingLeft: '0.75rem', height: '40px', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', opacity: 0.85 }}>
+                          %{selectedPrd ? (selectedPrd.tax_rate !== undefined && selectedPrd.tax_rate !== null ? selectedPrd.tax_rate : 20) : 20}
+                       </div>
+                    </div>
+                 </div>
 
-                {/* İrsaliye & Fatura */}
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                   <div className="input-group" style={{ flex: 1 }}>
-                     <label>İrsaliye No</label>
-                     <input className="input-field" placeholder="Opsiyonel" value={saleData.irsaliye_no} onChange={e => setSaleData({...saleData, irsaliye_no: e.target.value})} />
-                   </div>
-                   <div className="input-group" style={{ flex: 1 }}>
-                     <label>Fatura No</label>
-                     <input className="input-field" placeholder="Opsiyonel" value={saleData.fatura_no} onChange={e => setSaleData({...saleData, fatura_no: e.target.value})} />
-                   </div>
-                </div>
+                 {/* İrsaliye & Fatura */}
+                 <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div className="input-group" style={{ flex: 1 }}>
+                      <label>İrsaliye No</label>
+                      <input className="input-field" placeholder="Opsiyonel" value={saleData.irsaliye_no} onChange={e => setSaleData({...saleData, irsaliye_no: e.target.value})} />
+                    </div>
+                    <div className="input-group" style={{ flex: 1 }}>
+                      <label>Fatura No</label>
+                      <input className="input-field" placeholder="Opsiyonel" value={saleData.fatura_no} onChange={e => setSaleData({...saleData, fatura_no: e.target.value})} />
+                    </div>
+                 </div>
 
-                <div style={{ marginTop: '0.5rem', padding: '1.25rem', background: 'var(--primary-light)', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--primary-color)' }}>
-                   <span style={{ fontWeight: '700', color: 'var(--primary-color)' }}>Toplam Tahsilat:</span>
-                   <span style={{ fontSize: '1.5rem', fontWeight: '900', color: 'var(--primary-color)' }}>₺{(saleData.price * saleData.qty).toLocaleString()}</span>
-                </div>
+                 <div style={{ marginTop: '0.5rem', padding: '1.25rem', background: 'var(--primary-light)', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--primary-color)' }}>
+                    <span style={{ fontWeight: '700', color: 'var(--primary-color)' }}>Toplam Tahsilat:</span>
+                    <span style={{ fontSize: '1.5rem', fontWeight: '900', color: 'var(--primary-color)' }}>
+                       ₺{((priceWithTax || (saleData.price * (1 + (selectedPrd ? (selectedPrd.tax_rate !== undefined && selectedPrd.tax_rate !== null ? selectedPrd.tax_rate : 20) : 20) / 100))) * saleData.qty).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </span>
+                 </div>
 
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                   <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setIsAddModalOpen(false)}>İptal</button>
-                   <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={loading}>
-                      {loading ? 'İşleniyor...' : 'Satışı Onayla'}
-                   </button>
-                </div>
+                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                    <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={closeAddModal}>İptal</button>
+                    <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={loading}>
+                       {loading ? 'İşleniyor...' : 'Satışı Onayla'}
+                    </button>
+                 </div>
              </form>
           </div>
         </div>

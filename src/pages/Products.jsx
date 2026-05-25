@@ -12,7 +12,7 @@ const UNIQUE_UNITS = [...new Set(UNITS)];
 const INITIAL_FORM_STATE = { 
   name: '', sku: '', barcode: '', category: '', price: 0, cost_price: 0, 
   stock: 0, location_id: '', party_id: '', koli_adet: 1, koli_ici: 1, 
-  irsaliye_no: '', fatura_no: '', unit: 'Adet', tax_rate: 20 
+  irsaliye_no: '', fatura_no: '', unit: 'Adet', tax_rate: 20, price_with_tax: 0
 };
 
 export default function Products() {
@@ -27,6 +27,8 @@ export default function Products() {
   
   const [showScanner, setShowScanner] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [targetProduct, setTargetProduct] = useState(null);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -39,6 +41,39 @@ export default function Products() {
 
   const barcodeRef = useRef(null);
   const scannerRef = useRef(null);
+
+  const handlePriceChange = (val) => {
+    const priceVal = parseFloat(val) || 0;
+    const taxRate = parseFloat(formData.tax_rate) || 0;
+    const priceWithTax = priceVal * (1 + taxRate / 100);
+    setFormData(prev => ({
+      ...prev,
+      price: priceVal,
+      price_with_tax: parseFloat(priceWithTax.toFixed(4))
+    }));
+  };
+
+  const handlePriceWithTaxChange = (val) => {
+    const priceWithTaxVal = parseFloat(val) || 0;
+    const taxRate = parseFloat(formData.tax_rate) || 0;
+    const priceVal = priceWithTaxVal / (1 + taxRate / 100);
+    setFormData(prev => ({
+      ...prev,
+      price: parseFloat(priceVal.toFixed(4)),
+      price_with_tax: priceWithTaxVal
+    }));
+  };
+
+  const handleTaxRateChange = (rate) => {
+    const taxRate = parseFloat(rate) || 0;
+    const priceVal = parseFloat(formData.price) || 0;
+    const priceWithTax = priceVal * (1 + taxRate / 100);
+    setFormData(prev => ({
+      ...prev,
+      tax_rate: taxRate,
+      price_with_tax: parseFloat(priceWithTax.toFixed(4))
+    }));
+  };
 
   useEffect(() => {
     fetchInitialData();
@@ -110,7 +145,8 @@ export default function Products() {
     // Şema hatasını önlemek için güvenli obje oluştur
     const prdObj = {
       name: formData.name, sku: formData.sku, barcode: formData.barcode, 
-      category: formData.category, price: formData.price, cost_price: formData.cost_price
+      category: formData.category, price: formData.price, cost_price: formData.cost_price,
+      tax_rate: formData.tax_rate, unit: formData.unit
     };
     
     const { data: prdData, error: prdError } = await supabase.from('products').insert([prdObj]).select();
@@ -155,6 +191,67 @@ export default function Products() {
     setLoading(false);
   };
 
+  const openEditModal = (prd) => {
+    setEditingProduct(prd);
+    const taxRate = prd.tax_rate !== undefined && prd.tax_rate !== null ? prd.tax_rate : 20;
+    const priceVal = prd.price || 0;
+    const priceWithTax = priceVal * (1 + taxRate / 100);
+    setFormData({
+      name: prd.name || '',
+      sku: prd.sku || '',
+      barcode: prd.barcode || '',
+      category: prd.category || '',
+      price: priceVal,
+      cost_price: prd.cost_price || 0,
+      stock: 0,
+      location_id: locations[0]?.id || '',
+      party_id: '',
+      koli_adet: 1,
+      koli_ici: 1,
+      irsaliye_no: '',
+      fatura_no: '',
+      unit: prd.unit || 'Adet',
+      tax_rate: taxRate,
+      price_with_tax: parseFloat(priceWithTax.toFixed(4))
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditProduct = async (e) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setLoading(true);
+
+    const prdObj = {
+      name: formData.name,
+      sku: formData.sku,
+      barcode: formData.barcode,
+      category: formData.category,
+      price: formData.price,
+      cost_price: formData.cost_price,
+      tax_rate: formData.tax_rate,
+      unit: formData.unit
+    };
+
+    const { error } = await supabase.from('products').update(prdObj).eq('id', editingProduct.id);
+    
+    if (error) {
+      alert("Hata: " + error.message);
+    } else {
+      await supabase.from('audit_logs').insert([{
+        action: 'UPDATE',
+        feature: 'Ürün Yönetimi',
+        detail: `${formData.name} ürünü güncellendi.`,
+        user_name: 'Admin'
+      }]);
+      setIsEditModalOpen(false);
+      setEditingProduct(null);
+      setFormData({ ...INITIAL_FORM_STATE, location_id: locations[0]?.id || '' });
+      await fetchInitialData();
+    }
+    setLoading(false);
+  };
+
   const handleQuickStockIn = async (e) => {
     e.preventDefault();
     if (!targetProduct || !formData.location_id) return alert("Hata: Ürün veya depo seçilmedi.");
@@ -179,6 +276,12 @@ export default function Products() {
     });
 
     if (invError) { alert("Hata: " + invError.message); setLoading(false); return; }
+
+    // Master Alış Fiyatını Güncelle (Sistem Entegrasyonu)
+    const { error: prdUpdErr } = await supabase.from('products')
+      .update({ cost_price: formData.cost_price })
+      .eq('id', targetProduct.id);
+    if (prdUpdErr) console.error("Ürün master alış fiyatı güncellenemedi:", prdUpdErr);
 
     if (formData.party_id && totalQty > 0) {
        const debtAmount = formData.cost_price * totalQty;
@@ -283,10 +386,15 @@ export default function Products() {
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                 <th style={{ padding: '1rem' }}>Ürün Bilgisi</th>
+                <th style={{ padding: '1rem', textAlign: 'center' }}>Barkod No</th>
+                <th style={{ padding: '1rem', textAlign: 'center' }}>Ürün Cinsi (Kat.)</th>
                 <th style={{ padding: '1rem', textAlign: 'center' }}>Birim</th>
                 <th style={{ padding: '1rem', textAlign: 'center' }}>Toplam Stok</th>
                 <th style={{ padding: '1rem', textAlign: 'center' }}>Depo Dağılımı</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>Fiyatlandırma</th>
+                <th style={{ padding: '1rem', textAlign: 'center' }}>Alış Fiyatı (₺)</th>
+                <th style={{ padding: '1rem', textAlign: 'center' }}>Satış (KDV Hariç)</th>
+                <th style={{ padding: '1rem', textAlign: 'center' }}>KDV (%)</th>
+                <th style={{ padding: '1rem', textAlign: 'center' }}>Satış (KDV Dahil)</th>
                 <th style={{ padding: '1rem', textAlign: 'center' }}>Toplam Maliyet</th>
                 <th style={{ padding: '1rem', textAlign: 'right' }}>İşlemler</th>
               </tr>
@@ -295,12 +403,20 @@ export default function Products() {
               {filteredProducts.map(prd => {
                 const totalStock = (inventory || []).filter(i => i.product_id === prd.id).reduce((s,i)=>s+i.quantity,0);
                 const totalCost = totalStock * (prd.cost_price || 0);
+                const taxRate = prd.tax_rate !== undefined && prd.tax_rate !== null ? prd.tax_rate : 20;
+                const priceWithTax = (prd.price || 0) * (1 + taxRate / 100);
                 
                 return (
                   <tr key={prd.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '1rem' }}>
                       <div style={{ fontWeight: '700' }}>{prd.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{prd.sku}</div>
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                       <span style={{ fontSize: '0.85rem' }}>{prd.barcode || '-'}</span>
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                       <span className="badge badge-secondary" style={{ textTransform: 'capitalize' }}>{prd.category || 'Genel'}</span>
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                        <span className="badge badge-secondary">{prd.unit || 'Adet'}</span>
@@ -328,30 +444,36 @@ export default function Products() {
                        </div>
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
-                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100px' }}>
-                            <span style={{fontSize: '0.7rem', color: 'var(--text-muted)'}}>Maliyet:</span>
-                            <div style={{display:'flex', alignItems:'center'}}>
-                              <span style={{color:'var(--text-muted)', marginRight:'2px'}}>₺</span>
-                              <input type="number" step="0.01" style={{width: '60px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'right', fontSize:'0.8rem', background:'transparent', color:'var(--text-main)'}} 
-                                defaultValue={prd.cost_price || 0}
-                                onBlur={(e) => updateProductPrice(prd.id, 'cost_price', e.target.value)}
-                              />
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100px' }}>
-                            <span style={{fontSize: '0.7rem', color: 'var(--primary-color)'}}>Satış:</span>
-                            <div style={{display:'flex', alignItems:'center'}}>
-                              <span style={{color:'var(--text-muted)', marginRight:'2px'}}>₺</span>
-                              <input type="number" step="0.01" style={{width: '60px', border:'1px solid var(--primary-light)', borderRadius:'4px', padding:'2px', textAlign:'right', fontSize:'0.8rem', background:'transparent', color:'var(--primary-color)', fontWeight:'600'}} 
-                                defaultValue={prd.price || 0}
-                                onBlur={(e) => updateProductPrice(prd.id, 'price', e.target.value)}
-                              />
-                            </div>
-                          </div>
-                       </div>
+                      <div style={{display:'inline-flex', alignItems:'center'}}>
+                        <span style={{color:'var(--text-muted)', marginRight:'2px'}}>₺</span>
+                        <input type="number" step="0.01" style={{width: '65px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'right', fontSize:'0.85rem', background:'transparent', color:'var(--text-main)'}} 
+                          defaultValue={prd.cost_price || 0}
+                          onBlur={(e) => updateProductPrice(prd.id, 'cost_price', e.target.value)}
+                        />
+                      </div>
                     </td>
-                    <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 'bold' }}>₺{totalCost.toLocaleString()}</td>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                      <div style={{display:'inline-flex', alignItems:'center'}}>
+                        <span style={{color:'var(--text-muted)', marginRight:'2px'}}>₺</span>
+                        <input type="number" step="0.01" style={{width: '65px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'right', fontSize:'0.85rem', background:'transparent', color:'var(--text-main)'}} 
+                          defaultValue={prd.price || 0}
+                          onBlur={(e) => updateProductPrice(prd.id, 'price', e.target.value)}
+                        />
+                      </div>
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                      <div style={{display:'inline-flex', alignItems:'center'}}>
+                        <span style={{color:'var(--text-muted)', marginRight:'2px'}}>%</span>
+                        <input type="number" style={{width: '45px', border:'1px solid var(--border-color)', borderRadius:'4px', padding:'2px', textAlign:'center', fontSize:'0.85rem', background:'transparent', color:'var(--text-main)'}} 
+                          defaultValue={taxRate}
+                          onBlur={(e) => updateProductPrice(prd.id, 'tax_rate', e.target.value)}
+                        />
+                      </div>
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'center', fontWeight: '600', color: 'var(--primary-color)' }}>
+                      ₺{priceWithTax.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 'bold' }}>₺{totalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                     <td style={{ padding: '1rem', textAlign: 'right' }}>
                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                             <button className="btn btn-secondary p-1" title="Etiket Bas" onClick={() => { setPrintData({ product: prd, size: '50x30', count: 1 }); setIsPrintModalOpen(true); }}><Printer size={16} /></button>
@@ -361,6 +483,7 @@ export default function Products() {
                                 setFormData({ ...INITIAL_FORM_STATE, location_id: locations[0]?.id || '', cost_price: prd.cost_price || 0 }); 
                                 setIsStockModalOpen(true); 
                             }}><Plus size={16} /></button>
+                            <button className="btn btn-secondary p-1" title="Düzenle" onClick={() => openEditModal(prd)}><Edit size={16} /></button>
                             {isAdmin && (
                               <button className="btn btn-secondary p-1" style={{ color: 'var(--danger-color)' }} title="Ürünü Sil" onClick={async () => { if(confirm(`${prd.name} ürününü silmek istediğinize emin misiniz?`)) { await supabase.from('products').delete().eq('id', prd.id); await fetchInitialData(); } }}>
                                  <Trash2 size={16} />
@@ -398,7 +521,18 @@ export default function Products() {
                 </div>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     <div style={{ flex:1 }} className="input-group"><label>Alış Fiyatı (₺)</label><input type="number" step="0.01" className="input-field" value={formData.cost_price} onChange={e => setFormData({...formData, cost_price: parseFloat(e.target.value) || 0})} /></div>
-                    <div style={{ flex:1 }} className="input-group"><label>Satış Fiyatı (₺)</label><input type="number" step="0.01" className="input-field" value={formData.price} onChange={e => setFormData({...formData, price: parseFloat(e.target.value) || 0})} /></div>
+                    <div style={{ flex:1 }} className="input-group"><label>KDV Oranı (%)</label>
+                      <select className="input-field" value={formData.tax_rate} onChange={e => handleTaxRateChange(e.target.value)}>
+                        <option value="0">0% (Muaf)</option>
+                        <option value="1">1%</option>
+                        <option value="10">10%</option>
+                        <option value="20">20%</option>
+                      </select>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ flex:1 }} className="input-group"><label>Satış Fiyatı (KDV Hariç) (₺)</label><input type="number" step="0.0001" className="input-field" value={formData.price} onChange={e => handlePriceChange(e.target.value)} /></div>
+                    <div style={{ flex:1 }} className="input-group"><label>Satış Fiyatı (KDV Dahil) (₺)</label><input type="number" step="0.0001" className="input-field" value={formData.price_with_tax} onChange={e => handlePriceWithTaxChange(e.target.value)} /></div>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                    <div className="input-group" style={{ flex: 1 }}><label>Birim</label>
@@ -406,7 +540,7 @@ export default function Products() {
                       {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
                   </div>
-                  <div className="input-group" style={{ flex: 1 }}><label>Kategori</label><input type="text" className="input-field" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} /></div>
+                  <div className="input-group" style={{ flex: 1 }}><label>Kategori (Ürün Cinsi)</label><input type="text" className="input-field" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} /></div>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                    <div style={{ flex:1 }} className="input-group"><label>Giriş Miktarı</label><input type="number" className="input-field" value={formData.stock} onChange={e => setFormData({...formData, stock: parseInt(e.target.value) || 0})} /></div>
@@ -424,6 +558,55 @@ export default function Products() {
                    </select>
                 </div>
                 <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }}>Ürünü ve Stoku Kaydet</button>
+             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Düzenleme Modalı */}
+      {isEditModalOpen && editingProduct && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card animate-fade-in" style={{ width: '450px', padding: '2rem' }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ fontWeight: '600', margin: 0 }}>Ürün Bilgilerini Düzenle</h3>
+                <button className="btn btn-secondary" style={{ padding: '0.25rem' }} onClick={() => { setIsEditModalOpen(false); setEditingProduct(null); }}><X size={20}/></button>
+             </div>
+             <form onSubmit={handleEditProduct} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="input-group"><label>Ürün Adı</label><input type="text" className="input-field" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required /></div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                   <div style={{ flex:1 }} className="input-group"><label>SKU</label><input type="text" className="input-field" value={formData.sku} onChange={e => setFormData({...formData, sku: e.target.value})} required /></div>
+                   <div style={{ flex:1 }} className="input-group">
+                      <label>Barkod</label>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                         <input type="text" className="input-field" value={formData.barcode} onChange={e => setFormData({...formData, barcode: e.target.value})} />
+                         <button type="button" className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => setShowScanner(true)}><Camera size={18} /></button>
+                      </div>
+                   </div>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ flex:1 }} className="input-group"><label>Alış Fiyatı (₺)</label><input type="number" step="0.01" className="input-field" value={formData.cost_price} onChange={e => setFormData({...formData, cost_price: parseFloat(e.target.value) || 0})} /></div>
+                    <div style={{ flex:1 }} className="input-group"><label>KDV Oranı (%)</label>
+                      <select className="input-field" value={formData.tax_rate} onChange={e => handleTaxRateChange(e.target.value)}>
+                        <option value="0">0% (Muaf)</option>
+                        <option value="1">1%</option>
+                        <option value="10">10%</option>
+                        <option value="20">20%</option>
+                      </select>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ flex:1 }} className="input-group"><label>Satış Fiyatı (KDV Hariç) (₺)</label><input type="number" step="0.0001" className="input-field" value={formData.price} onChange={e => handlePriceChange(e.target.value)} /></div>
+                    <div style={{ flex:1 }} className="input-group"><label>Satış Fiyatı (KDV Dahil) (₺)</label><input type="number" step="0.0001" className="input-field" value={formData.price_with_tax} onChange={e => handlePriceWithTaxChange(e.target.value)} /></div>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                   <div className="input-group" style={{ flex: 1 }}><label>Birim</label>
+                    <select className="input-field" value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })}>
+                      {UNIQUE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <div className="input-group" style={{ flex: 1 }}><label>Kategori (Ürün Cinsi)</label><input type="text" className="input-field" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} /></div>
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }}>Değişiklikleri Kaydet</button>
              </form>
           </div>
         </div>
